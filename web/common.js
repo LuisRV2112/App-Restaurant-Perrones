@@ -39,6 +39,20 @@ function toast(msg) {
   setTimeout(() => t.remove(), 2600);
 }
 
+/* Sonido corto de notificación (no requiere archivos) */
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.start(); osc.stop(ctx.currentTime + 0.25);
+  } catch (e) { /* el navegador puede bloquear audio antes de la primera interacción */ }
+}
+
 /* Emoji de respaldo cuando el producto no tiene imagen */
 function emojiCat(cat) {
   return { hotdog: '🌭', combo: '🎁', bebida: '🥤', extra: '🧀', snack: '🍟' }[cat] || '🍽️';
@@ -86,6 +100,26 @@ async function pintarLogo() {
 
 function requiereRol(rol) {
   if (sessionStorage.getItem('rol') !== rol) location.href = 'login.html';
+}
+
+/* Sonido de notificación (WebAudio, sin archivos) — dos tonos tipo "¡din-don!" */
+let _audioCtx = null;
+function beep() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+    [[880, 0], [1174.66, 0.14]].forEach(([freq, t]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      o.connect(g); g.connect(ctx.destination);
+      const ini = ctx.currentTime + t;
+      g.gain.setValueAtTime(0.001, ini);
+      g.gain.exponentialRampToValueAtTime(0.25, ini + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ini + 0.35);
+      o.start(ini); o.stop(ini + 0.4);
+    });
+  } catch (e) { /* el navegador puede bloquear audio hasta la primera interacción */ }
 }
 
 function cerrarSesion() {

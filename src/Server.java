@@ -80,8 +80,8 @@ public class Server {
                 case "/api/ausencias" -> soloAdmin(rol) ? ausencias(metodo, body, q) : err403();
                 case "/api/finanzas"  -> soloAdmin(rol) ? finanzas(metodo, body, q) : err403();
                 case "/api/reportes"  -> soloAdmin(rol) ? reportes(q) : err403();
-                case "/api/pedidos"   -> pedidos(metodo, body, q, rol);
-                case "/api/mensajes"  -> mensajes(metodo, body, q, rol);
+                case "/api/pedidos"   -> pedidos(metodo, body, q, rol, ses);
+                case "/api/mensajes"  -> mensajes(metodo, body, q, rol, ses);
                 default -> mapa("error", "Ruta no encontrada");
             };
             int code = 200;
@@ -317,12 +317,18 @@ public class Server {
     /* ==================== PEDIDOS ==================== */
 
     @SuppressWarnings("unchecked")
-    static Object pedidos(String metodo, Map<String, Object> b, Map<String, String> q, String rol) {
+    static Object pedidos(String metodo, Map<String, Object> b, Map<String, String> q, String rol, Map<String, Object> ses) {
         List<Object> ps = lista("pedidos");
         switch (metodo) {
             case "GET": {
-                // Personal ve todo; el cliente solo lo suyo (por token de cliente)
-                if (rol.equals("admin") || rol.equals("cajero")) return ps;
+                if (rol.equals("admin")) return ps; // el admin ve todo
+                if (rol.equals("cajero")) {
+                    // cada cajero ve: pedidos nuevos sin recibir + SU propio historial de HOY
+                    List<Object> visibles = new ArrayList<>();
+                    for (Object o : ps)
+                        if (pedidoVisibleParaCajero((Map<String, Object>) o, ses)) visibles.add(o);
+                    return visibles;
+                }
                 String ct = q.get("clienteToken");
                 List<Object> propios = new ArrayList<>();
                 if (ct != null)
@@ -352,7 +358,11 @@ public class Server {
                 Map<String, Object> p = porId(ps, str(b.get("id")));
                 if (p == null) return mapa("_status", 404, "error", "Pedido no existe");
                 if (rol.equals("cajero") || rol.equals("admin")) {
-                    // cajero: actualizar estado / tiempo estimado
+                    // al recibirlo, el pedido queda asignado a ese cajero (su historial)
+                    if (rol.equals("cajero") && "recibido".equals(b.get("estado")) && p.get("cajeroId") == null) {
+                        p.put("cajeroId", ses.get("id"));
+                        p.put("cajeroNombre", nombreCajero(str(ses.get("id"))));
+                    }
                     if (b.containsKey("estado")) p.put("estado", b.get("estado"));
                     if (b.containsKey("tiempoEstimado")) p.put("tiempoEstimado", b.get("tiempoEstimado"));
                 } else {
@@ -390,17 +400,56 @@ public class Server {
         return n;
     }
 
+    /** Un cajero ve los pedidos nuevos (sin recibir) y su propio historial del día de hoy. */
+    static boolean pedidoVisibleParaCajero(Map<String, Object> p, Map<String, Object> ses) {
+        if ("enviado".equals(p.get("estado"))) return true; // pendientes: los ve cualquier cajero
+        String hoy = LocalDate.now().toString();
+        return str(ses.get("id")).equals(str(p.get("cajeroId")))
+                && str(p.get("fecha")).startsWith(hoy);
+    }
+
+    @SuppressWarnings("unchecked")
+    static String nombreCajero(String id) {
+        for (Object o : lista("cajeros")) {
+            Map<String, Object> c = (Map<String, Object>) o;
+            if (str(c.get("id")).equals(id)) return str(c.get("nombre"));
+        }
+        return "";
+    }
+
     /* ==================== CHAT ==================== */
 
     @SuppressWarnings("unchecked")
-    static Object mensajes(String metodo, Map<String, Object> b, Map<String, String> q, String rol) {
+    static Object mensajes(String metodo, Map<String, Object> b, Map<String, String> q, String rol, Map<String, Object> ses) {
         List<Object> ms = lista("mensajes");
         switch (metodo) {
             case "GET": {
                 String pid = q.get("pedidoId");
+                if (pid != null) { // chat de un pedido concreto
+                    List<Object> res = new ArrayList<>();
+                    for (Object o : ms)
+                        if (str(((Map<String, Object>) o).get("pedidoId")).equals(pid)) res.add(o);
+                    return res;
+                }
+                // sin pedidoId: todos los mensajes que le corresponden (para notificaciones)
+                Set<String> pedidosVisibles = new HashSet<>();
+                if (rol.equals("admin")) {
+                    for (Object o : lista("pedidos"))
+                        pedidosVisibles.add(str(((Map<String, Object>) o).get("id")));
+                } else if (rol.equals("cajero")) {
+                    for (Object o : lista("pedidos"))
+                        if (pedidoVisibleParaCajero((Map<String, Object>) o, ses))
+                            pedidosVisibles.add(str(((Map<String, Object>) o).get("id")));
+                } else {
+                    String ct = q.get("clienteToken");
+                    if (ct != null)
+                        for (Object o : lista("pedidos"))
+                            if (ct.equals(((Map<String, Object>) o).get("clienteToken")))
+                                pedidosVisibles.add(str(((Map<String, Object>) o).get("id")));
+                }
                 List<Object> res = new ArrayList<>();
                 for (Object o : ms)
-                    if (str(((Map<String, Object>) o).get("pedidoId")).equals(pid)) res.add(o);
+                    if (pedidosVisibles.contains(str(((Map<String, Object>) o).get("pedidoId")))) res.add(o);
                 return res;
             }
             case "POST": {

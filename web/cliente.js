@@ -25,7 +25,50 @@ async function init() {
   productos = await API.get('/api/productos');
   pintarMenu();
   actualizarBadge();
-  setInterval(refrescarPedidos, 4000);
+  restaurarEdicion();
+  setInterval(ciclo, 4000);
+  ciclo();
+}
+
+/* cada 4 s: repintar "Mis pedidos" si está visible y revisar novedades siempre */
+async function ciclo() {
+  await refrescarPedidos();
+  await revisarNovedades();
+}
+
+/* ---- notificaciones: mensajes del cajero y cambios de estado ---- */
+let msgsVistos = {};   // pedidoId -> cantidad de mensajes ya vistos
+let estadoVisto = {};  // pedidoId -> último estado conocido
+
+async function revisarNovedades() {
+  let ps;
+  try { ps = await API.get('/api/pedidos?clienteToken=' + clienteToken); }
+  catch (e) { return; }
+
+  for (const p of ps) {
+    // aviso cuando el restaurante cambia el estado del pedido
+    const antes = estadoVisto[p.id];
+    estadoVisto[p.id] = p.estado;
+    if (antes && antes !== p.estado) {
+      beep();
+      toast(p.estado === 'recibido' && p.tiempoEstimado
+        ? `✅ Pedido #${p.numero} recibido — listo en ~${p.tiempoEstimado} min`
+        : `📦 Pedido #${p.numero}: ${p.estado}`);
+    }
+
+    // aviso (y apertura automática) cuando escribe el cajero
+    if (['entregado', 'cancelado'].includes(p.estado)) continue;
+    let ms;
+    try { ms = await API.get('/api/mensajes?pedidoId=' + p.id); }
+    catch (e) { continue; }
+    const vistos = msgsVistos[p.id] ?? ms.length; // la primera vez no notifica
+    msgsVistos[p.id] = ms.length;
+    if (ms.length > vistos && ms[ms.length - 1].de === 'cajero' && chatAbierto !== p.id) {
+      beep();
+      toast(`💬 Nuevo mensaje del cajero — Pedido #${p.numero}`);
+      if (!document.querySelector('.velo')) abrirChat(p.id, p.numero); // se abre solo si no estás en otro modal
+    }
+  }
 }
 
 /* ==================== MENÚ (scroll continuo) ==================== */
@@ -234,7 +277,7 @@ function abrirCarrito() {
     </div>
     <h3 class="mt centro">Total: <span class="precio-tag">${Q(totalCarrito())}</span></h3>
     <div class="fila mt">
-      <button class="btn grow" onclick="cerrarModal()">Seguir viendo</button>
+      <button class="btn grow" onclick="cerrarModal();verSeccion('menu')">➕ Agregar más del menú</button>
       <button class="btn btn-jalapeno grow" onclick="abrirCheckout()">Continuar ➜</button>
     </div>`);
 }
@@ -360,6 +403,8 @@ async function enviarPedido() {
       toast('¡Pedido enviado! 🌭🚀');
     }
     carrito = []; editandoPedido = null; datosPrevios = null;
+    sessionStorage.removeItem('edicion');
+    quitarBanner();
     guardarCarrito();
     cerrarModal();
     verSeccion('pedidos');
@@ -418,8 +463,54 @@ function editarPedido(id) {
     editandoPedido = id;
     datosPrevios = p;
     guardarCarrito();
-    abrirCarrito();
+    // guardar el estado de edición por si recarga la página
+    sessionStorage.setItem('edicion', JSON.stringify({ id, numero: p.numero, datos: p }));
+    // llevar al menú: puede agregar más hot dogs, combos, bebidas... lo que quiera
+    verSeccion('menu');
+    mostrarBanner(p.numero);
+    toast('Agrega lo que quieras del menú y luego toca "Revisar y guardar" 🌭');
   });
+}
+
+/* ---- barra fija mientras se modifica un pedido ---- */
+
+function mostrarBanner(numero) {
+  quitarBanner();
+  const b = document.createElement('div');
+  b.id = 'bannerEdicion';
+  b.className = 'banner-edicion';
+  b.innerHTML = `
+    <span>✏️ Modificando el <b>pedido #${numero}</b> — agrega más productos del menú si quieres</span>
+    <button class="btn btn-mini btn-mostaza" onclick="abrirCarrito()">🛒 Revisar y guardar</button>
+    <button class="btn btn-mini" onclick="cancelarEdicion()">✖ Cancelar</button>`;
+  document.body.appendChild(b);
+}
+
+function quitarBanner() {
+  document.getElementById('bannerEdicion')?.remove();
+}
+
+function cancelarEdicion() {
+  carrito = [];
+  editandoPedido = null;
+  datosPrevios = null;
+  sessionStorage.removeItem('edicion');
+  guardarCarrito();
+  quitarBanner();
+  cerrarModal();
+  verSeccion('pedidos');
+  toast('Edición cancelada, tu pedido quedó como estaba');
+}
+
+/* si recargó la página a mitad de una edición, se restaura el banner */
+function restaurarEdicion() {
+  try {
+    const e = JSON.parse(sessionStorage.getItem('edicion') || 'null');
+    if (!e) return;
+    editandoPedido = e.id;
+    datosPrevios = e.datos;
+    mostrarBanner(e.numero);
+  } catch (err) { sessionStorage.removeItem('edicion'); }
 }
 
 async function eliminarPedido(id) {

@@ -285,6 +285,24 @@ th { background: var(--mostaza); font-family: var(--display); font-weight: 400; 
 }
 .hoja tr.fila-auto td { background: #F1E6CF; color: #5c4a2e; font-style: italic; }
 
+/* -------- banner de edición de pedido -------- */
+.banner-edicion {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 90;
+  background: var(--tinta);
+  color: var(--mostaza);
+  border-top: 3px solid var(--mostaza);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  font-weight: 800;
+  font-size: 14px;
+}
+
 /* -------- responsive: celulares -------- */
 @media (max-width: 640px) {
   .topbar { flex-wrap: wrap; padding: 8px 10px; gap: 8px; }

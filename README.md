@@ -54,14 +54,17 @@ El cliente **no necesita cuenta**: pide directamente desde la tienda.
 - Cuadro de **detalles del pedido** (ej. "hot dog tradicional sin cebolla y sin mostaza, el otro solo con ketchup"): el cajero lo ve resaltado en cada pedido y se puede cambiar al modificar el pedido.
 - **Modificar o eliminar** su pedido mientras el cajero aún no lo reciba.
 - Ver el **tiempo aproximado** que indica el restaurante cuando recibe el pedido.
-- **Chat** con el cajero por cada pedido.
+- **Chat** con el cajero por cada pedido, con **notificaciones**: cuando el cajero escribe suena una alerta (WebAudio) y el chat **se abre solo** para no perderse de nada; también avisa cuando el pedido cambia de estado.
+- Al **modificar un pedido** (antes de que lo reciban) se regresa al menú completo: puede **agregar más hot dogs, combos, bebidas o lo que quiera**, con una barra fija de "Revisar y guardar / Cancelar".
 
 ### Cajero
 - Recibe los pedidos en tiempo real (la pantalla se actualiza sola y avisa de pedidos nuevos).
 - Ve si el pedido es para **recoger en tienda** o **a domicilio**, con todos los datos del cliente y del pago (incluido el cambio a llevar).
 - Al recibir el pedido **ingresa el tiempo aproximado** en minutos, que se le muestra al cliente.
 - Avanza el estado del pedido: recibido → preparando → listo → entregado.
-- **Chat** con el cliente de cada pedido.
+- **Chat** con el cliente de cada pedido, con **notificación sonora y apertura automática** del chat cuando el cliente escribe; también suena cuando entra un pedido nuevo.
+- **🖨 Imprimir ticket**: cada pedido se puede mandar a la **impresora POS** (formato de 72 mm, fuente monoespaciada) con productos, notas, total, pago y cambio.
+- **Historial propio**: cada cajero ve los pedidos pendientes y únicamente los pedidos que **él mismo recibió hoy** — cada día empieza un historial nuevo, y el pedido queda marcado con el nombre del cajero que lo atendió.
 
 ### Administrador
 - **Productos:** agregar, editar y eliminar productos; cambiar **precios en Quetzales**; subir o quitar **imágenes**; agregar o quitar **videos**, ya sea **pegando un enlace** (YouTube o .mp4) o **subiendo el archivo MP4** (máx. 12 MB).
