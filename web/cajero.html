@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cajero — Los Perrones</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="marca" id="logoMarca">LOS PERRONES · CAJA</div>
+  <div class="relleno"></div>
+  <span id="quien" style="font-weight:800"></span>
+  <button class="btn btn-mini" onclick="cerrarSesion()">Salir</button>
+</header>
+
+<main class="contenedor">
+  <div class="fila">
+    <h2 style="font-size:32px">Pedidos</h2>
+    <div class="grow"></div>
+    <span class="chip">🔄 se actualiza solo cada 4 s</span>
+  </div>
+
+  <div class="fila mt" id="filtros">
+    <button class="btn btn-mostaza" data-f="activos" onclick="filtrar('activos')">Activos</button>
+    <button class="btn" data-f="todos" onclick="filtrar('todos')">Todos</button>
+  </div>
+
+  <div id="listaPedidos" class="col mt"></div>
+</main>
+
+<div id="modales"></div>
+
+<script src="common.js"></script>
+<script src="cajero.js"></script>
+</body>
+</html>

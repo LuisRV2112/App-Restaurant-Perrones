@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Los Perrones — Hot dogs estilo americano</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="marca" id="logoMarca">LOS PERRONES</div>
+  <div class="relleno"></div>
+  <button class="btn btn-mostaza" onclick="verSeccion('pedidos')">📋 Mis pedidos</button>
+  <button class="btn" onclick="abrirCarrito()">🛒 Carrito <span id="cantCarrito" class="chip" style="background:var(--salsa);color:var(--blanco)">0</span></button>
+  <a class="btn btn-mini" href="login.html" title="Acceso del personal">Personal</a>
+</header>
+
+<div class="marquesina"><span>
+  TOCINO CRUJIENTE ★ JALAPEÑO ★ QUESO FUNDIDO ★ PIÑA DULCE ★ CHEETOS FLAMING HOT ★ CEBOLLA CARAMELIZADA ★
+  TOCINO CRUJIENTE ★ JALAPEÑO ★ QUESO FUNDIDO ★ PIÑA DULCE ★ CHEETOS FLAMING HOT ★ CEBOLLA CARAMELIZADA ★
+</span></div>
+
+<main class="contenedor">
+
+  <!-- ============ PORTADA ============ -->
+  <section class="centro" style="padding:34px 0 10px">
+    <h1 style="font-size:clamp(42px,8vw,84px);color:var(--salsa);text-shadow:4px 4px 0 var(--tinta);transform:rotate(-2deg)">
+      LOS PERRONES
+    </h1>
+    <p style="font-size:19px;font-weight:800;max-width:520px;margin:0 auto">
+      Hot dogs estilo americano: salchicha envuelta en tocino crujiente,
+      hecha al momento y con salsas al gusto. 🌭🔥
+    </p>
+  </section>
+
+  <!-- ============ MENÚ (todo visible al bajar) ============ -->
+  <section id="sec-menu">
+    <nav class="nav-cats" id="navCats"></nav>
+    <div id="menuCompleto"></div>
+  </section>
+
+  <!-- ============ MIS PEDIDOS ============ -->
+  <section id="sec-pedidos" class="oculto">
+    <div class="fila">
+      <h2 style="font-size:32px">Mis pedidos</h2>
+      <div class="grow"></div>
+      <button class="btn btn-mini" onclick="verSeccion('menu')">← Volver al menú</button>
+    </div>
+    <div id="listaPedidos" class="col mt"></div>
+  </section>
+
+</main>
+
+<div id="modales"></div>
+
+<script src="common.js"></script>
+<script src="cliente.js"></script>
+</body>
+</html>

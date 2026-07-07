@@ -1,0 +1,305 @@
+/* ============================================================
+   LOS PERRONES — identidad "rótulo callejero"
+   Paleta: tinta #221407 · papel #FFF4DF · salsa #E02D0F
+           mostaza #FFC229 · jalapeño #1F7A33 · crema #FFE6B8
+   Tipos:  Titan One (rótulos) · Nunito (texto)
+   Firma:  tarjetas-calcomanía con borde de tinta y sombra dura
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Titan+One&family=Nunito:wght@400;700;800&display=swap');
+
+:root {
+  --tinta:    #221407;
+  --papel:    #FFF4DF;
+  --salsa:    #E02D0F;
+  --salsa-osc:#B02209;
+  --mostaza:  #FFC229;
+  --jalapeno: #1F7A33;
+  --crema:    #FFE6B8;
+  --blanco:   #FFFDF8;
+  --display:  'Titan One', 'Arial Black', sans-serif;
+  --texto:    'Nunito', 'Segoe UI', sans-serif;
+  --borde:    3px solid var(--tinta);
+  --sombra:   6px 6px 0 var(--tinta);
+  --sombra-sm:3px 3px 0 var(--tinta);
+  --radio:    14px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--texto);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+h1, h2, h3, .rotulo {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: .5px;
+  margin: 0 0 .4em;
+}
+
+a { color: var(--salsa); }
+
+button { font-family: inherit; cursor: pointer; }
+
+/* -------- botones calcomanía -------- */
+.btn {
+  display: inline-block;
+  border: var(--borde);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-weight: 800;
+  font-size: 15px;
+  background: var(--blanco);
+  color: var(--tinta);
+  box-shadow: var(--sombra-sm);
+  transition: transform .08s, box-shadow .08s;
+}
+.btn:hover  { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--tinta); }
+.btn:active { transform: translate(2px, 2px);   box-shadow: 1px 1px 0 var(--tinta); }
+.btn:focus-visible { outline: 3px dashed var(--salsa); outline-offset: 3px; }
+.btn-salsa    { background: var(--salsa);    color: var(--blanco); }
+.btn-mostaza  { background: var(--mostaza); }
+.btn-jalapeno { background: var(--jalapeno); color: var(--blanco); }
+.btn-mini { padding: 5px 10px; font-size: 13px; border-width: 2px; box-shadow: 2px 2px 0 var(--tinta); border-radius: 9px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* -------- tarjetas calcomanía (firma visual) -------- */
+.card {
+  background: var(--blanco);
+  border: var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 18px;
+}
+
+/* -------- inputs -------- */
+input, select, textarea {
+  font-family: inherit;
+  font-size: 15px;
+  border: 2px solid var(--tinta);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--blanco);
+  color: var(--tinta);
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 3px solid var(--mostaza);
+  outline-offset: 1px;
+}
+label { font-weight: 800; font-size: 13px; display: block; margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .4px; }
+
+/* -------- barra superior -------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--salsa);
+  border-bottom: var(--borde);
+  color: var(--blanco);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+}
+.topbar .marca {
+  font-family: var(--display);
+  font-size: 26px;
+  color: var(--mostaza);
+  text-shadow: 2px 2px 0 var(--tinta);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.topbar .marca img {
+  height: 44px; width: 44px;
+  object-fit: cover;
+  border: 2px solid var(--tinta);
+  border-radius: 50%;
+  background: var(--blanco);
+}
+.topbar .relleno { flex: 1; }
+
+/* -------- cinta de toppings (marquesina) -------- */
+.marquesina {
+  background: var(--tinta);
+  color: var(--mostaza);
+  font-family: var(--display);
+  font-size: 14px;
+  letter-spacing: 2px;
+  padding: 7px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  border-bottom: var(--borde);
+}
+.marquesina span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: rodar 22s linear infinite;
+}
+@keyframes rodar { to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .marquesina span { animation: none; padding-left: 0; }
+}
+
+/* -------- etiquetas de precio y estado -------- */
+.precio-tag {
+  font-family: var(--display);
+  background: var(--mostaza);
+  border: 2px solid var(--tinta);
+  border-radius: 10px;
+  box-shadow: var(--sombra-sm);
+  padding: 4px 12px;
+  transform: rotate(-3deg);
+  display: inline-block;
+  font-size: 18px;
+}
+.chip {
+  display: inline-block;
+  border: 2px solid var(--tinta);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--crema);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.chip.enviado    { background: var(--crema); }
+.chip.recibido   { background: var(--mostaza); }
+.chip.preparando { background: #FF9A3D; }
+.chip.listo      { background: var(--jalapeno); color: var(--blanco); }
+.chip.entregado  { background: var(--tinta);    color: var(--mostaza); }
+.chip.cancelado  { background: #999; color: var(--blanco); }
+
+/* -------- utilidades -------- */
+.fila { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.col  { display: flex; flex-direction: column; gap: 10px; }
+.grow { flex: 1; }
+.centro { text-align: center; }
+.oculto { display: none !important; }
+.mt { margin-top: 16px; }
+.contenedor { max-width: 1100px; margin: 0 auto; padding: 22px 18px 90px; }
+
+table { width: 100%; border-collapse: collapse; background: var(--blanco); }
+th, td { border: 2px solid var(--tinta); padding: 8px 10px; text-align: left; font-size: 14px; }
+th { background: var(--mostaza); font-family: var(--display); font-weight: 400; letter-spacing: .5px; }
+
+/* -------- modal -------- */
+.velo {
+  position: fixed; inset: 0;
+  background: rgba(34, 20, 7, .55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  background: var(--papel);
+  border: var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 22px;
+}
+
+/* -------- chat -------- */
+.chat-caja {
+  border: 2px solid var(--tinta);
+  border-radius: 10px;
+  background: var(--blanco);
+  height: 230px;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.burbuja {
+  max-width: 78%;
+  padding: 7px 12px;
+  border: 2px solid var(--tinta);
+  border-radius: 12px;
+  font-size: 14px;
+}
+.burbuja.mia   { align-self: flex-end; background: var(--mostaza); border-bottom-right-radius: 3px; }
+.burbuja.otra  { align-self: flex-start; background: var(--crema); border-bottom-left-radius: 3px; }
+.burbuja small { display: block; opacity: .6; font-size: 10px; }
+
+/* -------- toast -------- */
+#toast {
+  position: fixed;
+  bottom: 22px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--tinta);
+  color: var(--mostaza);
+  border: 2px solid var(--mostaza);
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-weight: 800;
+  z-index: 200;
+  box-shadow: var(--sombra-sm);
+}
+
+/* -------- menú en scroll continuo -------- */
+.nav-cats {
+  position: sticky;
+  top: 62px;               /* debajo de la topbar */
+  z-index: 40;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 4px;
+  background: var(--papel);
+  border-bottom: 2px dashed var(--tinta);
+  -webkit-overflow-scrolling: touch;
+}
+.nav-cats .btn { flex: 0 0 auto; }
+.seccion-cat { padding-top: 12px; scroll-margin-top: 130px; }
+.titulo-cat {
+  font-size: clamp(26px, 5vw, 38px);
+  color: var(--salsa);
+  text-shadow: 2px 2px 0 var(--tinta);
+  transform: rotate(-1deg);
+  margin: 22px 0 14px;
+}
+.grid-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+/* -------- hoja de cálculo editable -------- */
+.hoja td[contenteditable] { min-width: 70px; cursor: text; }
+.hoja td[contenteditable]:focus {
+  outline: 3px solid var(--mostaza);
+  outline-offset: -3px;
+  background: var(--blanco);
+}
+.hoja tr.fila-auto td { background: #F1E6CF; color: #5c4a2e; font-style: italic; }
+
+/* -------- responsive: celulares -------- */
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; padding: 8px 10px; gap: 8px; }
+  .topbar .marca { font-size: 20px; }
+  .topbar .marca img { height: 34px; width: 34px; }
+  .topbar .btn { padding: 7px 10px; font-size: 13px; }
+  .nav-cats { top: 0; }              /* la topbar envuelta ya no es fija de referencia */
+  .contenedor { padding: 14px 12px 90px; }
+  .grid-menu { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-menu .card h3 { font-size: 16px !important; }
+  .precio-tag { font-size: 14px; }
+  .modal { padding: 16px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 6px; }
+}
+@media (max-width: 420px) {
+  .grid-menu { grid-template-columns: 1fr; }
+}

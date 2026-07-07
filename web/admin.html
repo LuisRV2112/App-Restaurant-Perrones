@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administración — Los Perrones</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="marca" id="logoMarca">LOS PERRONES · ADMIN</div>
+  <div class="relleno"></div>
+  <a class="btn btn-mini" href="index.html" target="_blank">Ver tienda</a>
+  <button class="btn btn-mini" onclick="cerrarSesion()">Salir</button>
+</header>
+
+<main class="contenedor">
+  <nav class="fila" id="tabs">
+    <button class="btn btn-salsa" data-t="productos" onclick="verTab('productos')">🌭 Productos</button>
+    <button class="btn" data-t="logo"       onclick="verTab('logo')">🖼 Logo</button>
+    <button class="btn" data-t="cajeros"    onclick="verTab('cajeros')">👥 Cajeros</button>
+    <button class="btn" data-t="asistencia" onclick="verTab('asistencia')">📅 Asistencia</button>
+    <button class="btn" data-t="finanzas"   onclick="verTab('finanzas')">🧮 Finanzas</button>
+    <button class="btn" data-t="reportes"   onclick="verTab('reportes')">📊 Reportes</button>
+  </nav>
+
+  <!-- ========== PRODUCTOS ========== -->
+  <section id="tab-productos" class="mt">
+    <div class="fila">
+      <h2>Productos</h2>
+      <div class="grow"></div>
+      <button class="btn btn-jalapeno" onclick="formProducto()">＋ Agregar producto</button>
+    </div>
+    <div id="gridAdmin" class="mt"
+         style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px"></div>
+  </section>
+
+  <!-- ========== LOGO ========== -->
+  <section id="tab-logo" class="mt oculto">
+    <div class="card" style="max-width:460px">
+      <h2>Logo del restaurante</h2>
+      <div id="logoActual" class="centro mt"></div>
+      <label>Subir / reemplazar logo (imagen)</label>
+      <input type="file" id="archivoLogo" accept="image/*">
+      <div class="fila mt">
+        <button class="btn btn-jalapeno grow" onclick="subirLogo()">Guardar logo</button>
+        <button class="btn btn-salsa grow" onclick="quitarLogo()">Eliminar logo</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== CAJEROS ========== -->
+  <section id="tab-cajeros" class="mt oculto">
+    <div class="fila">
+      <h2>Cajeros</h2>
+      <div class="grow"></div>
+      <button class="btn btn-jalapeno" onclick="formCajero()">＋ Agregar cajero</button>
+    </div>
+    <div class="card mt" style="overflow-x:auto"><table id="tablaCajeros"></table></div>
+  </section>
+
+  <!-- ========== ASISTENCIA ========== -->
+  <section id="tab-asistencia" class="mt oculto">
+    <h2>Control de asistencia (días no trabajados)</h2>
+    <div class="card mt" style="max-width:520px">
+      <label>Cajero</label>
+      <select id="ausCajero"></select>
+      <label>Fecha en que no llegó</label>
+      <input type="date" id="ausFecha">
+      <label>Motivo (opcional)</label>
+      <input id="ausMotivo" placeholder="Ej. enfermedad, permiso...">
+      <button class="btn btn-jalapeno mt" onclick="agregarAusencia()">Registrar ausencia</button>
+    </div>
+    <div class="card mt" style="overflow-x:auto"><table id="tablaAusencias"></table></div>
+    <div class="card mt">
+      <h3>Resumen para sueldos (mes actual)</h3>
+      <div id="resumenSueldos"></div>
+    </div>
+  </section>
+
+  <!-- ========== FINANZAS ========== -->
+  <section id="tab-finanzas" class="mt oculto">
+    <div class="fila">
+      <h2>Hoja de cálculo — finanzas</h2>
+      <div class="grow"></div>
+      <button class="btn btn-jalapeno" onclick="agregarFila()">＋ Agregar fila</button>
+    </div>
+    <p style="margin:6px 0">
+      ✏️ Escribe directamente sobre las celdas, como en Excel: se guardan solas al salir de la celda.
+      Las filas doradas son <b>ventas automáticas</b> de los pedidos que recibe el cajero.
+    </p>
+    <div class="card mt" style="overflow-x:auto"><table class="hoja" id="tablaFinanzas"></table></div>
+    <div class="fila mt" id="totalesFinanzas"></div>
+  </section>
+
+  <!-- ========== REPORTES ========== -->
+  <section id="tab-reportes" class="mt oculto">
+    <h2>Reportes de ventas</h2>
+    <div class="card mt">
+      <div class="fila">
+        <div><label>Desde</label><input type="date" id="repDesde"></div>
+        <div><label>Hasta</label><input type="date" id="repHasta"></div>
+        <button class="btn btn-mostaza" style="align-self:flex-end" onclick="cargarReporte()">Generar reporte</button>
+      </div>
+    </div>
+    <div id="zonaReporte" class="mt"></div>
+  </section>
+
+</main>
+
+<div id="modales"></div>
+
+<script src="common.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

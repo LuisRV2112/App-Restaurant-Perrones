@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acceso del personal — Los Perrones</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="marca" id="logoMarca">LOS PERRONES</div>
+  <div class="relleno"></div>
+  <a class="btn btn-mini" href="index.html">← Volver a la tienda</a>
+</header>
+
+<main class="contenedor" style="max-width:440px">
+  <div class="card mt">
+    <h2 class="centro" style="color:var(--salsa);font-size:30px">Acceso del personal</h2>
+    <label>Usuario</label>
+    <input id="usuario" placeholder="usuario" autocomplete="username">
+    <label>Contraseña</label>
+    <input id="password" type="password" placeholder="contraseña" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')entrar()">
+    <button class="btn btn-salsa mt" style="width:100%" onclick="entrar()">Entrar</button>
+    <p class="centro" style="font-size:13px;opacity:.7">
+      Solo administrador y cajeros. Los clientes pueden pedir sin cuenta desde la tienda.
+    </p>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script>
+pintarLogo();
+async function entrar() {
+  try {
+    const r = await API.post('/api/login', {
+      usuario: document.getElementById('usuario').value.trim(),
+      password: document.getElementById('password').value,
+    });
+    sessionStorage.setItem('token', r.token);
+    sessionStorage.setItem('rol', r.rol);
+    sessionStorage.setItem('nombre', r.nombre);
+    location.href = r.rol === 'admin' ? 'admin.html' : 'cajero.html';
+  } catch (e) { toast(e.message); }
+}
+</script>
+</body>
+</html>
