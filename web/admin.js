@@ -121,6 +121,21 @@ async function cargarLogo() {
   document.getElementById('logoActual').innerHTML = cfg.logo
     ? `<img src="${cfg.logo}" style="max-height:130px;border:3px solid var(--tinta);border-radius:12px">`
     : '<p><i>El restaurante todavía no tiene logo.</i></p>';
+  const r = cfg.redes || {};
+  document.getElementById('redFb').value = r.facebook || '';
+  document.getElementById('redIg').value = r.instagram || '';
+  document.getElementById('redWa').value = r.whatsapp || '';
+}
+
+async function guardarRedes() {
+  const fb = document.getElementById('redFb').value.trim();
+  const ig = document.getElementById('redIg').value.trim();
+  const wa = document.getElementById('redWa').value.replace(/\D/g, '');
+  if (fb && !/^https?:\/\//.test(fb)) return toast('El enlace de Facebook debe empezar con https://');
+  if (ig && !/^https?:\/\//.test(ig)) return toast('El enlace de Instagram debe empezar con https://');
+  if (wa && (wa.length < 8 || wa.length > 15)) return toast('Revisa el número de WhatsApp (ej. 50255551234)');
+  await API.put('/api/config', { redes: { facebook: fb, instagram: ig, whatsapp: wa } });
+  toast('Redes sociales guardadas ✔');
 }
 
 async function subirLogo() {
@@ -244,9 +259,352 @@ async function borrarAusencia(id) {
   cargarAsistencia();
 }
 
-/* ==================== FINANZAS (hoja libre + ventas automáticas) ==================== */
+/* ==================== FINANZAS (resumen, caja, hoja, inventario) ==================== */
 
-async function cargarFinanzas() {
+let subFin = 'resumen';
+
+function cargarFinanzas() { verSubFin(subFin); }
+
+function verSubFin(s) {
+  subFin = s;
+  document.querySelectorAll('#subFin .btn').forEach(b =>
+    b.classList.toggle('btn-mostaza', b.dataset.s === s));
+  ['resumen', 'caja', 'hoja', 'inventario'].forEach(x =>
+    document.getElementById('fin-' + x).classList.toggle('oculto', x !== s));
+  ({ resumen: cargarResumen, caja: cargarCaja, hoja: cargarHoja, inventario: cargarInventario }[s])();
+}
+
+/* ---------- RESUMEN: caja, ganancias, pérdidas, medias ---------- */
+
+async function cargarResumen() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const mes = hoy.slice(0, 7);
+  const e = await API.get(`/api/estadisticas?desde=${mes}-01&hasta=${hoy}`);
+
+  const tarjeta = (titulo, valor, extra = '', fondo = 'var(--blanco)') => `
+    <div class="card grow centro" style="background:${fondo};min-width:160px">
+      <b>${titulo}</b>
+      <div style="font-family:var(--display);font-size:26px">${valor}</div>
+      ${extra ? `<small>${extra}</small>` : ''}
+    </div>`;
+
+  const gananciaOK = e.ganancia >= 0;
+  document.getElementById('fin-resumen').innerHTML = `
+    <div class="fila">
+      ${tarjeta('💵 En caja ahora', Q(e.saldoCaja), 'efectivo físico acumulado', 'var(--mostaza)')}
+      ${tarjeta(gananciaOK ? '📈 Ganancia del mes' : '📉 Pérdida del mes', Q(Math.abs(e.ganancia)),
+        'ventas + ingresos − gastos', gananciaOK ? '#D9F2DC' : '#FFD3C9')}
+      ${tarjeta('🛒 Ventas del mes', Q(e.ventasTotal), e.numPedidos + ' pedidos')}
+      ${tarjeta('💸 Pérdidas / salidas del mes', Q(e.perdidas), 'gastos + egresos + sueldos')}
+    </div>
+    <div class="fila mt">
+      ${tarjeta('🎯 Ticket promedio (media por pedido)', Q(e.ticketPromedio))}
+      ${tarjeta('📅 Media de venta diaria', Q(e.mediaDiaria), e.porDia.length + ' días con ventas')}
+      ${tarjeta('📦 Valor del inventario', Q(e.valorInventario))}
+      ${tarjeta('🥫 Efectivo por ventas hoy', Q(e.efectivoVentasHoy))}
+    </div>
+    ${e.bajoStock.length ? `
+      <div class="card mt" style="background:#FFD3C9">
+        <b>⚠️ Inventario bajo — hay que comprar:</b>
+        ${e.bajoStock.map(b => `<span class="chip" style="background:var(--salsa);color:var(--blanco)">
+          ${esc(b.nombre)}: quedan ${b.cantidad} ${esc(b.unidad)} (mín. ${b.minimo})</span>`).join(' ')}
+      </div>` : ''}
+    <p class="mt" style="font-size:13px;opacity:.75">
+      El resumen es del mes en curso (del ${mes}-01 a hoy). En 📊 Reportes puedes elegir cualquier rango de fechas.</p>`;
+}
+
+/* ---------- CAJA: control del efectivo físico ---------- */
+
+const DENOMS = ['200', '100', '50', '20', '10', '5', '1', '0.50', '0.25'];
+let asignaciones = [];
+
+async function cargarCaja() {
+  const [e, movs, asigs, cjs] = await Promise.all([
+    API.get('/api/estadisticas'), API.get('/api/caja'),
+    API.get('/api/asignaciones'), API.get('/api/cajeros'),
+  ]);
+  cajeros = cjs;
+  asignaciones = asigs;
+  movs.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  asignaciones.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+
+  document.getElementById('cajaCards').innerHTML = `
+    <div class="card grow centro" style="background:var(--mostaza)"><b>💵 Saldo en caja</b>
+      <div style="font-family:var(--display);font-size:30px">${Q(e.saldoCaja)}</div></div>
+    <div class="card grow centro"><b>Ventas en efectivo (histórico)</b>
+      <div style="font-family:var(--display);font-size:24px">${Q(e.efectivoVentasTotal)}</div></div>
+    <div class="card grow centro"><b>Entradas manuales</b>
+      <div style="font-family:var(--display);font-size:24px">${Q(e.entradasCaja)}</div></div>
+    <div class="card grow centro"><b>Salidas / retiros</b>
+      <div style="font-family:var(--display);font-size:24px">${Q(e.salidasCaja)}</div></div>`;
+
+  // formulario de asignación
+  document.getElementById('asigCajero').innerHTML =
+    cajeros.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  if (!document.getElementById('asigFecha').value)
+    document.getElementById('asigFecha').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('asigDesglose').innerHTML = DENOMS.map(d => `
+    <div style="width:86px">
+      <label style="margin:4px 0 2px">Q${d}</label>
+      <input type="number" min="0" step="1" value="0" id="den-${d.replace('.', '_')}"
+             oninput="calcFondo()" style="text-align:center">
+    </div>`).join('');
+  calcFondo();
+
+  // tabla de asignaciones
+  document.getElementById('tablaAsignaciones').innerHTML = `
+    <tr><th>Fecha</th><th>Cajero</th><th>Fondo</th><th>Desglose</th><th>Resultado</th><th>Acciones</th></tr>
+    ${asignaciones.map(a => `
+      <tr>
+        <td>${esc(a.fecha)}</td>
+        <td>${esc(a.cajeroNombre)}</td>
+        <td><b>${Q(a.total)}</b></td>
+        <td style="font-size:12px">${textoDesglose(a.desglose)}</td>
+        <td>${resultadoAsig(a)}</td>
+        <td class="fila">
+          ${a.estado === 'abierta'
+            ? `<button class="btn btn-mini btn-jalapeno" onclick="modalCierre('${a.id}')">🔒 Cerrar caja</button>` : ''}
+          <button class="btn btn-mini btn-salsa" onclick="borrarAsignacion('${a.id}')">🗑</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="6">Sin cajas asignadas todavía.</td></tr>'}`;
+
+  document.getElementById('tablaCaja').innerHTML = `
+    <tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th></th></tr>
+    ${movs.map(m => `
+      <tr>
+        <td>${esc(m.fecha)}</td>
+        <td><span class="chip" style="background:${m.tipo === 'entrada' ? 'var(--jalapeno)' : 'var(--salsa)'};color:var(--blanco)">${esc(m.tipo)}</span></td>
+        <td>${esc(m.concepto)}</td>
+        <td>${Q(m.monto)}</td>
+        <td><button class="btn btn-mini btn-salsa" onclick="borrarMovCaja('${m.id}')">🗑</button></td>
+      </tr>`).join('') || '<tr><td colspan="5">Sin movimientos manuales. Las ventas en efectivo entran solas.</td></tr>'}`;
+}
+
+function leerDesglose() {
+  const d = {};
+  DENOMS.forEach(x => {
+    const n = parseInt(document.getElementById('den-' + x.replace('.', '_')).value || 0);
+    if (n > 0) d[x] = n;
+  });
+  return d;
+}
+
+function calcFondo() {
+  const d = leerDesglose();
+  const total = Object.entries(d).reduce((a, [den, n]) => a + parseFloat(den) * n, 0);
+  document.getElementById('asigTotal').textContent = Q(total);
+}
+
+function textoDesglose(d) {
+  const partes = Object.entries(d || {})
+    .sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]))
+    .map(([den, n]) => `${n}×Q${den}`);
+  return partes.join(' · ') || '—';
+}
+
+function resultadoAsig(a) {
+  if (a.estado === 'abierta') return '<span class="chip recibido">abierta</span>';
+  const c = a.cierre || {};
+  const dif = c.diferencia || 0;
+  const detalle = `fondo ${Q(a.total)} + ventas efectivo ${Q(c.ventasEfectivo)} = esperado ${Q(c.esperado)} · contado ${Q(c.contado)}`;
+  if (Math.abs(dif) < 0.01)
+    return `<span class="chip listo">✔ cuadró</span><br><small>${detalle}</small>`;
+  if (dif < 0)
+    return `<span class="chip" style="background:var(--salsa);color:var(--blanco)">⚠ faltan ${Q(-dif)}</span><br><small>${detalle}</small>`;
+  return `<span class="chip" style="background:var(--mostaza)">sobran ${Q(dif)}</span><br><small>${detalle}</small>`;
+}
+
+async function asignarCaja() {
+  const d = leerDesglose();
+  if (!Object.keys(d).length) return toast('Indica el desglose del fondo (cuántos billetes de cada uno)');
+  try {
+    await API.post('/api/asignaciones', {
+      cajeroId: document.getElementById('asigCajero').value,
+      fecha: document.getElementById('asigFecha').value,
+      desglose: d,
+    });
+    toast('Caja asignada ✔');
+    cargarCaja();
+  } catch (e) { toast(e.message); }
+}
+
+function modalCierre(id) {
+  const a = asignaciones.find(x => x.id === id);
+  modal(`
+    <h2 style="color:var(--salsa)">🔒 Cierre de caja — ${esc(a.cajeroNombre)}</h2>
+    <p style="margin:4px 0">
+      📅 ${esc(a.fecha)} · Fondo entregado: <b>${Q(a.total)}</b><br>
+      <small>${textoDesglose(a.desglose)}</small>
+    </p>
+    <p style="margin:4px 0">Cuenta el efectivo de la caja <b>billete por billete</b>. El sistema
+      compara contra el fondo + las ventas en efectivo que este cajero recibió ese día.</p>
+    <div class="fila">
+      ${DENOMS.map(d => `
+        <div style="width:86px">
+          <label style="margin:4px 0 2px">Q${d}</label>
+          <input type="number" min="0" step="1" value="0" id="cden-${d.replace('.', '_')}"
+                 oninput="calcCierre()" style="text-align:center">
+        </div>`).join('')}
+    </div>
+    <h3 class="centro mt">Contado: <span class="precio-tag" id="cierreTotal">Q0.00</span></h3>
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-salsa grow" onclick="cerrarCaja('${id}')">Cerrar caja</button>
+    </div>`);
+}
+
+function leerDesgloseCierre() {
+  const d = {};
+  DENOMS.forEach(x => {
+    const n = parseInt(document.getElementById('cden-' + x.replace('.', '_'))?.value || 0);
+    if (n > 0) d[x] = n;
+  });
+  return d;
+}
+
+function calcCierre() {
+  const d = leerDesgloseCierre();
+  const total = Object.entries(d).reduce((a, [den, n]) => a + parseFloat(den) * n, 0);
+  document.getElementById('cierreTotal').textContent = Q(total);
+}
+
+async function cerrarCaja(id) {
+  const d = leerDesgloseCierre();
+  if (!Object.keys(d).length) return toast('Cuenta el efectivo: indica cuántos billetes de cada denominación');
+  try {
+    const a = await API.put('/api/asignaciones', { id, desglose: d });
+    cerrarModal();
+    const dif = a.cierre.diferencia || 0;
+    if (Math.abs(dif) < 0.01) toast('✔ La caja cuadró perfecto');
+    else if (dif < 0) toast(`⚠ Faltan ${Q(-dif)} en la caja de ${a.cajeroNombre}`);
+    else toast(`Sobran ${Q(dif)} en la caja de ${a.cajeroNombre}`);
+    cargarCaja();
+  } catch (e) { toast(e.message); }
+}
+
+async function borrarAsignacion(id) {
+  if (!confirm('¿Eliminar este registro de caja?')) return;
+  await API.del('/api/asignaciones?id=' + id);
+  cargarCaja();
+}
+
+async function agregarMovCaja() {
+  const monto = parseFloat(document.getElementById('cajaMonto').value || 0);
+  const concepto = document.getElementById('cajaConcepto').value.trim();
+  if (!monto || monto <= 0) return toast('Escribe el monto');
+  if (!concepto) return toast('Escribe el concepto del movimiento');
+  await API.post('/api/caja', { tipo: document.getElementById('cajaTipo').value, concepto, monto });
+  document.getElementById('cajaConcepto').value = '';
+  document.getElementById('cajaMonto').value = '';
+  toast('Movimiento registrado ✔');
+  cargarCaja();
+}
+
+async function borrarMovCaja(id) {
+  await API.del('/api/caja?id=' + id);
+  cargarCaja();
+}
+
+/* ---------- INVENTARIO ---------- */
+
+let inventario = [];
+
+async function cargarInventario() {
+  inventario = await API.get('/api/inventario');
+  const valor = inventario.reduce((a, i) => a + i.cantidad * i.costo, 0);
+  const bajos = inventario.filter(i => i.cantidad <= i.minimo);
+
+  document.getElementById('invCards').innerHTML = `
+    <div class="card grow centro"><b>Artículos</b>
+      <div style="font-family:var(--display);font-size:26px">${inventario.length}</div></div>
+    <div class="card grow centro" style="background:var(--mostaza)"><b>Valor del inventario</b>
+      <div style="font-family:var(--display);font-size:26px">${Q(valor)}</div></div>
+    <div class="card grow centro" style="background:${bajos.length ? '#FFD3C9' : '#D9F2DC'}"><b>Con poca existencia</b>
+      <div style="font-family:var(--display);font-size:26px">${bajos.length}</div></div>`;
+
+  document.getElementById('tablaInventario').innerHTML = `
+    <tr><th>Artículo</th><th>Existencia</th><th>Mínimo</th><th>Costo unit.</th><th>Valor</th><th>Acciones</th></tr>
+    ${inventario.map(i => `
+      <tr style="${i.cantidad <= i.minimo ? 'background:#FFD3C9' : ''}">
+        <td>${esc(i.nombre)} ${i.cantidad <= i.minimo ? '⚠️' : ''}</td>
+        <td>
+          <button class="btn btn-mini" onclick="ajustarStock('${i.id}',-1)">−</button>
+          <b> ${i.cantidad} ${esc(i.unidad)} </b>
+          <button class="btn btn-mini" onclick="ajustarStock('${i.id}',1)">+</button>
+        </td>
+        <td>${i.minimo}</td>
+        <td>${Q(i.costo)}</td>
+        <td>${Q(i.cantidad * i.costo)}</td>
+        <td class="fila">
+          <button class="btn btn-mini btn-mostaza" onclick="formArticulo('${i.id}')">✏️</button>
+          <button class="btn btn-mini btn-salsa" onclick="borrarArticulo('${i.id}')">🗑</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="6">Inventario vacío. Agrega tu primer artículo arriba.</td></tr>'}`;
+}
+
+async function agregarArticulo() {
+  const val = i => document.getElementById(i).value;
+  if (!val('invNombre').trim()) return toast('Escribe el nombre del artículo');
+  await API.post('/api/inventario', {
+    nombre: val('invNombre').trim(),
+    unidad: val('invUnidad').trim() || 'unidades',
+    cantidad: parseFloat(val('invCantidad') || 0),
+    minimo: parseFloat(val('invMinimo') || 0),
+    costo: parseFloat(val('invCosto') || 0),
+  });
+  ['invNombre', 'invUnidad', 'invCantidad', 'invMinimo', 'invCosto'].forEach(i =>
+    document.getElementById(i).value = '');
+  toast('Artículo agregado ✔');
+  cargarInventario();
+}
+
+async function ajustarStock(id, d) {
+  const i = inventario.find(x => x.id === id);
+  if (!i) return;
+  const nueva = Math.max(0, i.cantidad + d);
+  await API.put('/api/inventario', { id, cantidad: nueva });
+  cargarInventario();
+}
+
+function formArticulo(id) {
+  const i = inventario.find(x => x.id === id);
+  modal(`
+    <h2 style="color:var(--salsa)">Editar artículo</h2>
+    <label>Nombre</label><input id="eNombre" value="${esc(i.nombre)}">
+    <label>Unidad</label><input id="eUnidad" value="${esc(i.unidad)}">
+    <label>Cantidad</label><input id="eCantidad" type="number" step="0.01" min="0" value="${i.cantidad}">
+    <label>Mínimo (alerta)</label><input id="eMinimo" type="number" step="0.01" min="0" value="${i.minimo}">
+    <label>Costo unitario (Q)</label><input id="eCosto" type="number" step="0.01" min="0" value="${i.costo}">
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-jalapeno grow" onclick="guardarArticulo('${id}')">Guardar</button>
+    </div>`);
+}
+
+async function guardarArticulo(id) {
+  const val = i => document.getElementById(i).value;
+  await API.put('/api/inventario', {
+    id,
+    nombre: val('eNombre').trim(),
+    unidad: val('eUnidad').trim(),
+    cantidad: parseFloat(val('eCantidad') || 0),
+    minimo: parseFloat(val('eMinimo') || 0),
+    costo: parseFloat(val('eCosto') || 0),
+  });
+  toast('Artículo actualizado ✔');
+  cerrarModal();
+  cargarInventario();
+}
+
+async function borrarArticulo(id) {
+  if (!confirm('¿Eliminar este artículo del inventario?')) return;
+  await API.del('/api/inventario?id=' + id);
+  cargarInventario();
+}
+
+/* ---------- HOJA DE CÁLCULO (la de siempre) ---------- */
+
+async function cargarHoja() {
   let pedidos;
   [finanzas, pedidos] = await Promise.all([API.get('/api/finanzas'), API.get('/api/pedidos')]);
 
@@ -292,7 +650,7 @@ async function agregarFila() {
     descripcion: '',
     monto: 0,
   });
-  await cargarFinanzas();
+  await cargarHoja();
   // dejar el cursor en la descripción de la fila nueva
   document.querySelector('#tablaFinanzas tr[data-id] td[data-campo="descripcion"]')?.focus();
 }
@@ -339,7 +697,7 @@ async function actualizarTotales() {
 
 async function borrarFinanza(id) {
   await API.del('/api/finanzas?id=' + id);
-  cargarFinanzas();
+  cargarHoja();
 }
 
 /* ==================== REPORTES ==================== */
@@ -347,23 +705,70 @@ async function borrarFinanza(id) {
 async function cargarReporte() {
   const desde = document.getElementById('repDesde').value;
   const hasta = document.getElementById('repHasta').value;
-  let url = '/api/reportes?';
-  if (desde) url += 'desde=' + desde + '&';
-  if (hasta) url += 'hasta=' + hasta;
-  const r = await API.get(url);
+  let rango = '';
+  if (desde) rango += 'desde=' + desde + '&';
+  if (hasta) rango += 'hasta=' + hasta;
+  const [r, e] = await Promise.all([
+    API.get('/api/reportes?' + rango),
+    API.get('/api/estadisticas?' + rango),
+  ]);
 
   const filas = Object.entries(r.porProducto)
     .sort((a, b) => b[1].cantidad - a[1].cantidad);
 
+  // gráfica de barras de ventas por día (CSS puro)
+  const maxDia = Math.max(...e.porDia.map(d => d.total), 1);
+  const barras = e.porDia.slice(-21).map(d => `
+    <div class="barra-col" title="${d.fecha}: ${Q(d.total)} (${d.pedidos} pedidos)">
+      <div class="barra" style="height:${Math.max(5, d.total / maxDia * 100)}%"></div>
+      <small>${d.fecha.slice(8)}/${d.fecha.slice(5, 7)}</small>
+    </div>`).join('');
+
+  const gananciaOK = e.ganancia >= 0;
   document.getElementById('zonaReporte').innerHTML = `
     <div class="fila">
       <div class="card grow centro"><b>Pedidos que entraron</b>
         <div style="font-family:var(--display);font-size:34px">${r.pedidosEntrados}</div></div>
       <div class="card grow centro"><b>Pedidos vendidos</b>
-        <div style="font-family:var(--display);font-size:34px">${r.pedidosVendidos}</div></div>
+        <div style="font-family:var(--display);font-size:34px">${e.numPedidos}</div></div>
       <div class="card grow centro" style="background:var(--mostaza)"><b>Total de ventas</b>
-        <div style="font-family:var(--display);font-size:34px">${Q(r.totalVentas)}</div></div>
+        <div style="font-family:var(--display);font-size:34px">${Q(e.ventasTotal)}</div></div>
+      <div class="card grow centro" style="background:${gananciaOK ? '#D9F2DC' : '#FFD3C9'}">
+        <b>${gananciaOK ? 'Ganancia' : 'Pérdida'} del período</b>
+        <div style="font-family:var(--display);font-size:34px">${Q(Math.abs(e.ganancia))}</div></div>
     </div>
+
+    <div class="fila mt">
+      <div class="card grow centro"><b>🎯 Ticket promedio</b>
+        <div style="font-family:var(--display);font-size:24px">${Q(e.ticketPromedio)}</div>
+        <small>media por pedido</small></div>
+      <div class="card grow centro"><b>📅 Media diaria</b>
+        <div style="font-family:var(--display);font-size:24px">${Q(e.mediaDiaria)}</div>
+        <small>${e.porDia.length} días con ventas</small></div>
+      <div class="card grow centro"><b>🛵 Domicilio vs 🏪 Tienda</b>
+        <div style="font-size:17px;font-weight:800">${Q(e.porTipo.domicilio)} / ${Q(e.porTipo.recoger)}</div></div>
+      <div class="card grow centro"><b>💵 Efectivo vs 🏦 Transferencia</b>
+        <div style="font-size:17px;font-weight:800">${Q(e.porPago.efectivo)} / ${Q(e.porPago.transferencia)}</div></div>
+    </div>
+
+    ${e.porDia.length ? `
+    <div class="card mt">
+      <h3>📈 Ventas por día ${e.porDia.length > 21 ? '(últimos 21 días del rango)' : ''}</h3>
+      <div class="grafica">${barras}</div>
+    </div>` : ''}
+
+    ${e.topProductos.length ? `
+    <div class="card mt">
+      <h3>🏆 Los más vendidos</h3>
+      ${e.topProductos.map((t, i) => `
+        <div class="fila" style="margin:4px 0">
+          <span style="width:26px;font-weight:800">${['🥇','🥈','🥉'][i] || (i + 1) + '.'}</span>
+          <b class="grow">${esc(t.nombre)}</b>
+          <span class="chip">${t.cantidad} vendidos</span>
+          <b>${Q(t.total)}</b>
+        </div>`).join('')}
+    </div>` : ''}
+
     <div class="card mt" style="overflow-x:auto">
       <h3>Ventas por producto</h3>
       <table>

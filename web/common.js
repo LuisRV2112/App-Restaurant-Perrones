@@ -95,7 +95,8 @@ async function pintarLogo() {
     const cfg = await API.get('/api/config');
     const cont = document.getElementById('logoMarca');
     if (cont && cfg.logo) cont.innerHTML = `<img src="${cfg.logo}" alt="logo">` + cont.innerHTML;
-  } catch (e) { /* sin logo */ }
+    return cfg;
+  } catch (e) { return {}; }
 }
 
 function requiereRol(rol) {

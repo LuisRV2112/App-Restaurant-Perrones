@@ -18,7 +18,7 @@
 <main class="contenedor">
   <nav class="fila" id="tabs">
     <button class="btn btn-salsa" data-t="productos" onclick="verTab('productos')">🌭 Productos</button>
-    <button class="btn" data-t="logo"       onclick="verTab('logo')">🖼 Logo</button>
+    <button class="btn" data-t="logo"       onclick="verTab('logo')">🖼 Logo y redes</button>
     <button class="btn" data-t="cajeros"    onclick="verTab('cajeros')">👥 Cajeros</button>
     <button class="btn" data-t="asistencia" onclick="verTab('asistencia')">📅 Asistencia</button>
     <button class="btn" data-t="finanzas"   onclick="verTab('finanzas')">🧮 Finanzas</button>
@@ -36,16 +36,32 @@
          style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px"></div>
   </section>
 
-  <!-- ========== LOGO ========== -->
+  <!-- ========== LOGO Y REDES ========== -->
   <section id="tab-logo" class="mt oculto">
-    <div class="card" style="max-width:460px">
-      <h2>Logo del restaurante</h2>
-      <div id="logoActual" class="centro mt"></div>
-      <label>Subir / reemplazar logo (imagen)</label>
-      <input type="file" id="archivoLogo" accept="image/*">
-      <div class="fila mt">
-        <button class="btn btn-jalapeno grow" onclick="subirLogo()">Guardar logo</button>
-        <button class="btn btn-salsa grow" onclick="quitarLogo()">Eliminar logo</button>
+    <div class="fila" style="align-items:flex-start">
+      <div class="card grow" style="max-width:460px">
+        <h2>Logo del restaurante</h2>
+        <div id="logoActual" class="centro mt"></div>
+        <label>Subir / reemplazar logo (imagen)</label>
+        <input type="file" id="archivoLogo" accept="image/*">
+        <div class="fila mt">
+          <button class="btn btn-jalapeno grow" onclick="subirLogo()">Guardar logo</button>
+          <button class="btn btn-salsa grow" onclick="quitarLogo()">Eliminar logo</button>
+        </div>
+      </div>
+
+      <div class="card grow" style="max-width:460px">
+        <h2>🌐 Redes sociales</h2>
+        <p style="margin:4px 0;font-size:14px">Se muestran al final de la tienda. Deja vacío lo que no uses.</p>
+        <label>📘 Facebook (enlace de tu página)</label>
+        <input id="redFb" placeholder="https://facebook.com/losperrones">
+        <label>📸 Instagram (enlace de tu perfil)</label>
+        <input id="redIg" placeholder="https://instagram.com/losperrones">
+        <label>💬 WhatsApp (número con código de país, sin + ni guiones)</label>
+        <input id="redWa" placeholder="50255551234">
+        <p style="font-size:13px;opacity:.75;margin:4px 0">
+          Con WhatsApp también aparece un botón flotante en la tienda para que te escriban directo.</p>
+        <button class="btn btn-jalapeno mt" style="width:100%" onclick="guardarRedes()">Guardar redes</button>
       </div>
     </div>
   </section>
@@ -81,17 +97,86 @@
 
   <!-- ========== FINANZAS ========== -->
   <section id="tab-finanzas" class="mt oculto">
-    <div class="fila">
-      <h2>Hoja de cálculo — finanzas</h2>
-      <div class="grow"></div>
-      <button class="btn btn-jalapeno" onclick="agregarFila()">＋ Agregar fila</button>
+    <h2>Finanzas</h2>
+    <nav class="fila" id="subFin">
+      <button class="btn btn-mostaza" data-s="resumen"    onclick="verSubFin('resumen')">📊 Resumen</button>
+      <button class="btn" data-s="caja"       onclick="verSubFin('caja')">💵 Caja</button>
+      <button class="btn" data-s="hoja"       onclick="verSubFin('hoja')">🧮 Hoja de cálculo</button>
+      <button class="btn" data-s="inventario" onclick="verSubFin('inventario')">📦 Inventario</button>
+    </nav>
+
+    <!-- Resumen -->
+    <div id="fin-resumen" class="mt"></div>
+
+    <!-- Caja -->
+    <div id="fin-caja" class="mt oculto">
+      <div id="cajaCards" class="fila"></div>
+
+      <!-- Cajas asignadas a cajeros -->
+      <div class="card mt">
+        <h3>👥 Caja de los cajeros (apertura del día)</h3>
+        <p style="margin:4px 0;font-size:14px">
+          Asigna el fondo con su sencillo. Al final del día cierras la caja contando el efectivo
+          y el sistema calcula si <b>cuadra, falta o sobra</b> contra las ventas en efectivo de ese cajero.
+        </p>
+        <div class="fila">
+          <div><label>Cajero</label><select id="asigCajero"></select></div>
+          <div><label>Fecha</label><input type="date" id="asigFecha"></div>
+        </div>
+        <label>Desglose del fondo (cantidad de billetes/monedas de cada denominación)</label>
+        <div class="fila" id="asigDesglose"></div>
+        <div class="fila mt">
+          <h3 class="grow" style="margin:0">Fondo total: <span class="precio-tag" id="asigTotal">Q0.00</span></h3>
+          <button class="btn btn-jalapeno" onclick="asignarCaja()">💵 Asignar caja</button>
+        </div>
+      </div>
+      <div class="card mt" style="overflow-x:auto"><table id="tablaAsignaciones"></table></div>
+
+      <!-- Caja general -->
+      <div class="card mt" style="max-width:560px">
+        <h3>Movimientos de la caja general</h3>
+        <div class="fila">
+          <div><label>Tipo</label>
+            <select id="cajaTipo">
+              <option value="entrada">Entrada (meter efectivo)</option>
+              <option value="salida">Salida (retiro / pago en efectivo)</option>
+            </select></div>
+          <div class="grow"><label>Concepto</label><input id="cajaConcepto" placeholder="Ej. fondo inicial, retiro, compra de gas..."></div>
+          <div><label>Monto (Q)</label><input type="number" id="cajaMonto" step="0.01" min="0" style="width:120px"></div>
+          <button class="btn btn-jalapeno" style="align-self:flex-end" onclick="agregarMovCaja()">＋ Registrar</button>
+        </div>
+      </div>
+      <div class="card mt" style="overflow-x:auto"><table id="tablaCaja"></table></div>
     </div>
-    <p style="margin:6px 0">
-      ✏️ Escribe directamente sobre las celdas, como en Excel: se guardan solas al salir de la celda.
-      Las filas doradas son <b>ventas automáticas</b> de los pedidos que recibe el cajero.
-    </p>
-    <div class="card mt" style="overflow-x:auto"><table class="hoja" id="tablaFinanzas"></table></div>
-    <div class="fila mt" id="totalesFinanzas"></div>
+
+    <!-- Hoja de cálculo -->
+    <div id="fin-hoja" class="mt oculto">
+      <div class="fila">
+        <p class="grow" style="margin:0">
+          ✏️ Escribe directo sobre las celdas, como en Excel. Las filas doradas son
+          <b>ventas automáticas</b> de los pedidos que recibe el cajero.</p>
+        <button class="btn btn-jalapeno" onclick="agregarFila()">＋ Agregar fila</button>
+      </div>
+      <div class="card mt" style="overflow-x:auto"><table class="hoja" id="tablaFinanzas"></table></div>
+      <div class="fila mt" id="totalesFinanzas"></div>
+    </div>
+
+    <!-- Inventario -->
+    <div id="fin-inventario" class="mt oculto">
+      <div id="invCards" class="fila"></div>
+      <div class="card mt">
+        <h3>Agregar artículo al inventario</h3>
+        <div class="fila">
+          <div class="grow"><label>Artículo</label><input id="invNombre" placeholder="Ej. Salchichas"></div>
+          <div><label>Unidad</label><input id="invUnidad" placeholder="unidades / lb / bolsas" style="width:150px"></div>
+          <div><label>Cantidad</label><input type="number" id="invCantidad" step="0.01" min="0" style="width:100px"></div>
+          <div><label>Mínimo (alerta)</label><input type="number" id="invMinimo" step="0.01" min="0" style="width:110px"></div>
+          <div><label>Costo unit. (Q)</label><input type="number" id="invCosto" step="0.01" min="0" style="width:110px"></div>
+          <button class="btn btn-jalapeno" style="align-self:flex-end" onclick="agregarArticulo()">＋ Agregar</button>
+        </div>
+      </div>
+      <div class="card mt" style="overflow-x:auto"><table id="tablaInventario"></table></div>
+    </div>
   </section>
 
   <!-- ========== REPORTES ========== -->

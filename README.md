@@ -64,14 +64,21 @@ El cliente **no necesita cuenta**: pide directamente desde la tienda.
 - Avanza el estado del pedido: recibido → preparando → listo → entregado.
 - **Chat** con el cliente de cada pedido, con **notificación sonora y apertura automática** del chat cuando el cliente escribe; también suena cuando entra un pedido nuevo.
 - **🖨 Imprimir ticket**: cada pedido se puede mandar a la **impresora POS** (formato de 72 mm, fuente monoespaciada) con productos, notas, total, pago y cambio.
+- **🛒 Tomar pedido (modo tablet, todo táctil)**: apartado para atender clientes en el restaurante — botones grandes por categoría, un toque agrega el producto (los combos piden snack/bebida y los extras a qué hot dog van), cambio calculado en vivo, y al cobrar el pedido **nace recibido, asignado a ese cajero** (cuenta en su historial, su caja y las estadísticas) y el **ticket sale solo a la impresora**. Estos pedidos quedan como "🍽 En restaurante".
 - **Historial propio**: cada cajero ve los pedidos pendientes y únicamente los pedidos que **él mismo recibió hoy** — cada día empieza un historial nuevo, y el pedido queda marcado con el nombre del cajero que lo atendió.
 
 ### Administrador
 - **Productos:** agregar, editar y eliminar productos; cambiar **precios en Quetzales**; subir o quitar **imágenes**; agregar o quitar **videos**, ya sea **pegando un enlace** (YouTube o .mp4) o **subiendo el archivo MP4** (máx. 12 MB).
-- **Logo:** agregar, actualizar o eliminar el logo del restaurante (se muestra en todas las páginas).
+- **Logo y redes:** agregar, actualizar o eliminar el logo del restaurante (se muestra en todas las páginas), y configurar las **redes sociales** (Facebook, Instagram y WhatsApp) que aparecen al final de la tienda; con WhatsApp se agrega además un **botón flotante** para que los clientes escriban directo.
 - **Cajeros:** agregar, actualizar o eliminar cajeros (con usuario, contraseña y sueldo).
 - **Asistencia:** registrar los días que un cajero no llegó a trabajar; el sistema calcula el descuento y el sueldo a pagar del mes.
-- **Finanzas:** **hoja de cálculo libre**: se escribe directamente sobre las celdas (como en Excel) y se guardan solas; además está **conectada a las ventas**: cada pedido que recibe el cajero aparece automáticamente como ingreso, y los totales y el balance lo incluyen.
+- **Finanzas** con 4 secciones:
+  - **📊 Resumen**: cuánto hay **en caja**, **ganancia o pérdida** del mes, ventas, pérdidas/salidas, **ticket promedio** (media por pedido), **media de venta diaria**, valor del inventario y alertas de artículos por agotarse.
+  - **💵 Caja**: control del efectivo físico — las ventas en efectivo entran solas y se registran entradas y salidas manuales; muestra el saldo actual.
+  - **👤 Caja por cajero (fondo y corte)**: el admin asigna a cada cajero su fondo del día **desglosado por denominaciones** (ej. 2×Q100, 5×Q20, 10×Q10...) y el sistema calcula el total solo. El cajero ve su caja asignada en su panel. Al final del día se hace el **corte**: se cuenta el efectivo billete por billete y el sistema compara contra fondo + ventas en efectivo de ese cajero, marcando si **cuadró, falta o sobra** — sin pérdidas sin explicación. No se pueden abrir dos cajas al mismo cajero el mismo día ni cerrar dos veces.
+  - **🧮 Hoja de cálculo libre**: se escribe directo sobre las celdas (como en Excel) y se guarda solo; conectada a las ventas del cajero.
+  - **📦 Inventario**: artículos con existencia, mínimo de alerta, costo unitario y valor total; botones +/− para ajustar rápido y filas en rojo cuando hay que comprar.
+- **Reportes y estadísticas:** además del detalle por producto, incluye **gráfica de ventas por día**, ganancia/pérdida del período, ticket promedio, media diaria, top de más vendidos, y distribución domicilio vs tienda y efectivo vs transferencia, todo filtrable por fechas.
 - **Reportes:** cuántos pedidos entraron, unidades vendidas por producto (hot dogs, combos, bebidas, etc.) y **total de ventas en Q**, con filtro por rango de fechas.
 
 ---

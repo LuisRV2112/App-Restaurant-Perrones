@@ -11,8 +11,22 @@ let primeraCarga = true;         // en la primera carga no se notifica lo viejo
 let pedidosCache = [];           // último listado (para imprimir y abrir chats)
 
 pintarLogo();
+cargarMiCaja();
 refrescar();
 setInterval(refrescar, 4000);
+setInterval(cargarMiCaja, 30000); // por si el admin la asigna o cierra durante el día
+
+async function cargarMiCaja() {
+  try {
+    const as = await API.get('/api/asignaciones'); // el servidor devuelve solo la mía de hoy
+    const el = document.getElementById('miCaja');
+    if (!as.length) { el.innerHTML = ''; return; }
+    const a = as[as.length - 1];
+    el.innerHTML = a.estado === 'abierta'
+      ? `<span class="chip" style="background:var(--mostaza)">💵 Tu caja de hoy: <b>${Q(a.total)}</b></span>`
+      : `<span class="chip entregado">💵 Caja de hoy cerrada</span>`;
+  } catch (e) { /* sin caja asignada */ }
+}
 
 function filtrar(f) {
   filtro = f;
@@ -50,7 +64,7 @@ async function refrescar() {
       <div class="fila">
         <h3 style="margin:0">Pedido #${p.numero}</h3>
         <span class="chip ${p.estado}">${p.estado}</span>
-        <span class="chip">${p.tipo === 'domicilio' ? '🛵 Servicio a domicilio' : '🏪 Recoger en tienda'}</span>
+        <span class="chip">${p.tipo === 'domicilio' ? '🛵 Servicio a domicilio' : p.tipo === 'local' ? '🍽 En restaurante' : '🏪 Recoger en tienda'}</span>
         ${p.cajeroNombre ? `<span class="chip" style="background:var(--crema)">👤 ${esc(p.cajeroNombre)}</span>` : ''}
         <div class="grow"></div>
         <b style="font-size:18px">${Q(p.total)}</b>
@@ -130,7 +144,10 @@ async function vigilarMensajes(ps) {
 /* ---------- impresión POS ---------- */
 
 function imprimirTicket(id) {
-  const p = pedidosCache.find(x => x.id === id);
+  imprimirTicketDe(pedidosCache.find(x => x.id === id));
+}
+
+function imprimirTicketDe(p) {
   if (!p) return;
   const linea = '--------------------------------';
   const fPago = p.pago || {};
@@ -154,7 +171,7 @@ function imprimirTicket(id) {
     <div class="c">${linea}</div>
     <div>PEDIDO #${p.numero}</div>
     <div>${esc(p.fecha)}</div>
-    <div>${p.tipo === 'domicilio' ? 'SERVICIO A DOMICILIO' : 'RECOGER EN TIENDA'}</div>
+    <div>${p.tipo === 'domicilio' ? 'SERVICIO A DOMICILIO' : p.tipo === 'local' ? 'EN RESTAURANTE' : 'RECOGER EN TIENDA'}</div>
     <div>Cliente: ${esc(p.cliente?.nombre || '')}</div>
     ${p.cliente?.telefono ? `<div>Tel: ${esc(p.cliente.telefono)}</div>` : ''}
     ${p.tipo === 'domicilio' ? `<div>Dir: ${esc(p.cliente?.direccion || '')}</div>` : ''}
@@ -243,4 +260,224 @@ async function enviarChat() {
   await API.post('/api/mensajes', { pedidoId: chatAbierto, texto: t.value.trim() });
   t.value = '';
   cargarChat();
+}
+
+/* ==================== TOMAR PEDIDO (punto de venta táctil) ==================== */
+
+const POS_CATS = [
+  ['hotdog', '🌭 Hot Dogs'],
+  ['combo',  '🎁 Combos'],
+  ['extra',  '🧀 Extras'],
+  ['snack',  '🍟 Snacks'],
+  ['bebida', '🥤 Bebidas'],
+];
+let productosPos = [];
+let carritoPos = [];
+let catPos = 'hotdog';
+
+function verVista(v) {
+  document.querySelectorAll('#vistas .btn').forEach(b =>
+    b.classList.toggle('btn-mostaza', b.dataset.v === v));
+  document.getElementById('vista-pedidos').classList.toggle('oculto', v !== 'pedidos');
+  document.getElementById('vista-tomar').classList.toggle('oculto', v !== 'tomar');
+  if (v === 'tomar' && !productosPos.length) cargarPos();
+}
+
+async function cargarPos() {
+  productosPos = await API.get('/api/productos');
+  pintarPosTabs();
+  pintarPosGrid();
+  pintarCarritoPos();
+}
+
+function pintarPosTabs() {
+  document.getElementById('posTabs').innerHTML = POS_CATS.map(([c, n]) =>
+    `<button class="btn pos-tab ${c === catPos ? 'btn-salsa' : ''}"
+             onclick="catPos='${c}';pintarPosTabs();pintarPosGrid()">${n}</button>`).join('');
+}
+
+function pintarPosGrid() {
+  const lista = productosPos.filter(p => p.categoria === catPos);
+  document.getElementById('posGrid').innerHTML = lista.map(p => `
+    <button class="pos-prod" onclick="tocarProducto('${p.id}')">
+      <span class="pos-emoji">${p.imagen
+        ? `<img src="${p.imagen}" alt="">` : emojiCat(p.categoria)}</span>
+      <b>${esc(p.nombre)}</b>
+      <span class="precio-tag" style="font-size:15px">${Q(p.precio)}</span>
+    </button>`).join('') || '<p>No hay productos en esta categoría.</p>';
+}
+
+/* --- tocar un producto: directo, combo o extra con destino --- */
+
+function tocarProducto(id) {
+  const p = productosPos.find(x => x.id === id);
+  if (p.categoria === 'combo') { posCombo(p); return; }
+  if (p.categoria === 'extra') { posExtra(p); return; }
+  posAgregar(p, '');
+}
+
+function posAgregar(p, nota) {
+  const ya = carritoPos.find(i => i.productoId === p.id && i.nota === nota);
+  if (ya) ya.cantidad++;
+  else carritoPos.push({ productoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, nota });
+  pintarCarritoPos();
+}
+
+function posCombo(p) {
+  const sel = (id, lista) =>
+    `<select id="${id}" style="font-size:16px;padding:12px">${lista.map(x => `<option>${esc(x.nombre)}</option>`).join('')}</select>`;
+  const bebidas = productosPos.filter(x => x.categoria === 'bebida');
+  const snacks  = productosPos.filter(x => x.categoria === 'snack');
+  const dogs    = productosPos.filter(x => x.categoria === 'hotdog');
+  const extras  = productosPos.filter(x => x.categoria === 'extra');
+  const esJauria = /jaur/i.test(p.nombre);
+  modalCajero(`
+    <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
+    ${esJauria ? `
+      <label>Hot dog #1</label>${sel('posDog1', dogs)}
+      <label>Hot dog #2</label>${sel('posDog2', dogs)}
+      <label>Topping extra #1</label>${sel('posEx1', extras)}
+      <label>Topping extra #2</label>${sel('posEx2', extras)}` : ''}
+    <label>Snack</label>${sel('posSnack', snacks)}
+    <label>Bebida</label>${sel('posBebida', bebidas)}
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModalCajero()">Cancelar</button>
+      <button class="btn btn-salsa grow" style="padding:14px" onclick="posConfirmarCombo('${p.id}', ${esJauria})">Agregar</button>
+    </div>`);
+}
+
+function posConfirmarCombo(id, esJauria) {
+  const p = productosPos.find(x => x.id === id);
+  const v = i => document.getElementById(i).value;
+  let nota = '';
+  if (esJauria) nota += `Dogs: ${v('posDog1')} + ${v('posDog2')} · Extras: ${v('posEx1')} + ${v('posEx2')} · `;
+  nota += `Snack: ${v('posSnack')} · Bebida: ${v('posBebida')}`;
+  posAgregar(p, nota);
+  cerrarModalCajero();
+}
+
+function posExtra(p) {
+  const destinos = [];
+  carritoPos.forEach(i => {
+    const prod = productosPos.find(x => x.id === i.productoId);
+    const cat = prod ? prod.categoria : '';
+    if (cat === 'hotdog' || cat === 'combo')
+      for (let u = 1; u <= i.cantidad; u++)
+        destinos.push(i.cantidad > 1 ? `${i.nombre} #${u}` : i.nombre);
+  });
+  if (!destinos.length) { posAgregar(p, 'Aparte (en vasito)'); return; }
+  modalCajero(`
+    <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
+    <label>¿Para qué hot dog?</label>
+    <select id="posDestino" style="font-size:16px;padding:12px">
+      ${destinos.map(d => `<option>${esc(d)}</option>`).join('')}
+      <option value="__aparte__">Aparte (en vasito)</option>
+    </select>
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModalCajero()">Cancelar</button>
+      <button class="btn btn-salsa grow" style="padding:14px" onclick="posConfirmarExtra('${p.id}')">Agregar</button>
+    </div>`);
+}
+
+function posConfirmarExtra(id) {
+  const p = productosPos.find(x => x.id === id);
+  const v = document.getElementById('posDestino').value;
+  posAgregar(p, v === '__aparte__' ? 'Aparte (en vasito)' : 'Para el ' + v);
+  cerrarModalCajero();
+}
+
+/* --- carrito del POS --- */
+
+const posTotal = () => carritoPos.reduce((a, i) => a + i.precio * i.cantidad, 0);
+
+function pintarCarritoPos() {
+  document.getElementById('posItems').innerHTML = carritoPos.length ? carritoPos.map((i, k) => `
+    <div class="fila" style="border:2px solid var(--tinta);border-radius:10px;padding:6px;background:var(--blanco)">
+      <div class="grow" style="font-size:14px">
+        <b>${esc(i.nombre)}</b> — ${Q(i.precio)}
+        ${i.nota ? `<br><small>${esc(i.nota)}</small>` : ''}
+      </div>
+      <button class="btn btn-mini" style="padding:8px 12px" onclick="posCant(${k},-1)">−</button>
+      <b>${i.cantidad}</b>
+      <button class="btn btn-mini" style="padding:8px 12px" onclick="posCant(${k},1)">+</button>
+    </div>`).join('')
+    : '<p style="opacity:.6"><i>Toca los productos del menú para agregarlos 👈</i></p>';
+  document.getElementById('posTotal').textContent = Q(posTotal());
+  posCalcCambio();
+}
+
+function posCant(k, d) {
+  carritoPos[k].cantidad += d;
+  if (carritoPos[k].cantidad <= 0) carritoPos.splice(k, 1);
+  pintarCarritoPos();
+}
+
+function limpiarPos() {
+  carritoPos = [];
+  document.getElementById('posNombre').value = '';
+  document.getElementById('posNotas').value = '';
+  document.getElementById('posPagaCon').value = '';
+  pintarCarritoPos();
+}
+
+function posCambioPago() {
+  document.getElementById('posZonaEfectivo').style.display =
+    document.getElementById('posPago').value === 'efectivo' ? '' : 'none';
+  posCalcCambio();
+}
+
+function posCalcCambio() {
+  const el = document.getElementById('posCambio');
+  if (!el) return;
+  const con = parseFloat(document.getElementById('posPagaCon').value || 0);
+  const t = posTotal();
+  el.textContent = con >= t && t > 0 ? `Cambio: ${Q(con - t)}` : (con > 0 ? 'No alcanza para el total' : '');
+}
+
+/* --- cobrar --- */
+
+async function cobrarPos() {
+  if (!carritoPos.length) return toast('El pedido está vacío');
+  const metodo = document.getElementById('posPago').value;
+  const pagaCon = metodo === 'efectivo'
+    ? parseFloat(document.getElementById('posPagaCon').value || 0) : null;
+  if (metodo === 'efectivo' && (!pagaCon || pagaCon < posTotal()))
+    return toast('Indica con cuánto paga el cliente (debe cubrir el total)');
+
+  const pedido = {
+    items: carritoPos,
+    total: posTotal(),
+    tipo: 'local',
+    cliente: { nombre: document.getElementById('posNombre').value.trim() || 'Cliente en restaurante' },
+    notas: document.getElementById('posNotas').value.trim(),
+    pago: {
+      metodo, pagaCon,
+      cambio: metodo === 'efectivo' ? +(pagaCon - posTotal()).toFixed(2) : null,
+    },
+  };
+  try {
+    const p = await API.post('/api/pedidos', pedido);
+    pedidosCache.push(p);
+    beep();
+    toast(`✅ Pedido #${p.numero} cobrado — ${Q(p.total)}`);
+    imprimirTicketDe(p);   // ticket directo a la impresora POS
+    limpiarPos();
+    refrescar();
+  } catch (e) { toast(e.message); }
+}
+
+/* --- modal genérico del cajero --- */
+
+function modalCajero(html) {
+  cerrarModalCajero();
+  const v = document.createElement('div');
+  v.className = 'velo';
+  v.id = 'veloCajero';
+  v.innerHTML = `<div class="modal">${html}</div>`;
+  v.addEventListener('click', e => { if (e.target === v) cerrarModalCajero(); });
+  document.getElementById('modales').appendChild(v);
+}
+
+function cerrarModalCajero() {
+  document.getElementById('veloCajero')?.remove();
 }

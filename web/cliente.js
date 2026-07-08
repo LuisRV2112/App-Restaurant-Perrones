@@ -21,13 +21,47 @@ const clienteToken = localStorage.getItem('clienteToken');
 
 init();
 async function init() {
-  pintarLogo();
+  const cfg = await pintarLogo();
   productos = await API.get('/api/productos');
   pintarMenu();
+  pintarRedes(cfg.redes || {});
   actualizarBadge();
   restaurarEdicion();
   setInterval(ciclo, 4000);
   ciclo();
+}
+
+/* ==================== REDES SOCIALES ==================== */
+
+function pintarRedes(r) {
+  const fb = (r.facebook || '').trim();
+  const ig = (r.instagram || '').trim();
+  const wa = (r.whatsapp || '').replace(/\D/g, ''); // solo dígitos, ej. 50255551234
+  if (!fb && !ig && !wa) return;
+
+  const botones = [];
+  if (fb) botones.push(`<a class="btn red-fb" href="${esc(fb)}" target="_blank" rel="noopener">📘 Facebook</a>`);
+  if (ig) botones.push(`<a class="btn red-ig" href="${esc(ig)}" target="_blank" rel="noopener">📸 Instagram</a>`);
+  if (wa) botones.push(`<a class="btn red-wa" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>`);
+
+  document.getElementById('pieRedes').innerHTML = `
+    <div class="pie-redes">
+      <h2 style="color:var(--mostaza);text-shadow:2px 2px 0 #000;transform:rotate(-1deg)">¡Síguenos! 🌭</h2>
+      <div class="fila" style="justify-content:center">${botones.join('')}</div>
+      <p style="opacity:.8;font-size:13px">Los Perrones — hot dogs estilo americano</p>
+    </div>`;
+
+  // botón flotante de WhatsApp para escribir directo al restaurante
+  if (wa) {
+    const f = document.createElement('a');
+    f.className = 'wa-flotante';
+    f.href = 'https://wa.me/' + wa;
+    f.target = '_blank';
+    f.rel = 'noopener';
+    f.title = 'Escríbenos por WhatsApp';
+    f.textContent = '💬';
+    document.body.appendChild(f);
+  }
 }
 
 /* cada 4 s: repintar "Mis pedidos" si está visible y revisar novedades siempre */

@@ -79,6 +79,10 @@ public class Server {
                 case "/api/cajeros"   -> soloAdmin(rol) ? cajeros(metodo, body, q) : err403();
                 case "/api/ausencias" -> soloAdmin(rol) ? ausencias(metodo, body, q) : err403();
                 case "/api/finanzas"  -> soloAdmin(rol) ? finanzas(metodo, body, q) : err403();
+                case "/api/caja"      -> soloAdmin(rol) ? caja(metodo, body, q) : err403();
+                case "/api/asignaciones" -> asignaciones(metodo, body, q, rol, ses);
+                case "/api/inventario"-> soloAdmin(rol) ? inventario(metodo, body, q) : err403();
+                case "/api/estadisticas" -> soloAdmin(rol) ? estadisticas(q) : err403();
                 case "/api/reportes"  -> soloAdmin(rol) ? reportes(q) : err403();
                 case "/api/pedidos"   -> pedidos(metodo, body, q, rol, ses);
                 case "/api/mensajes"  -> mensajes(metodo, body, q, rol, ses);
@@ -137,6 +141,7 @@ public class Server {
         if (!soloAdmin(rol)) return err403();
         if (b.containsKey("logo")) cfg.put("logo", b.get("logo")); // string dataURL o null para eliminar
         if (b.containsKey("nombre")) cfg.put("nombre", b.get("nombre"));
+        if (b.containsKey("redes")) cfg.put("redes", b.get("redes")); // {facebook, instagram, whatsapp}
         guardar();
         return cfg;
     }
@@ -314,6 +319,310 @@ public class Server {
                 "totalVentas", totalVentas);
     }
 
+    /* ==================== CAJA (efectivo físico) ==================== */
+
+    @SuppressWarnings("unchecked")
+    static Object caja(String metodo, Map<String, Object> b, Map<String, String> q) {
+        List<Object> cs = lista("caja");
+        switch (metodo) {
+            case "GET": return cs;
+            case "POST": {
+                Map<String, Object> m = mapa(
+                        "id", nuevoId(),
+                        "fecha", b.containsKey("fecha") && !str(b.get("fecha")).isBlank()
+                                ? str(b.get("fecha")) : LocalDate.now().toString(),
+                        "tipo", str(b.get("tipo")),       // entrada | salida
+                        "concepto", str(b.get("concepto")),
+                        "monto", num(b.get("monto")));
+                cs.add(m);
+                guardar();
+                return m;
+            }
+            case "DELETE": {
+                cs.removeIf(o -> str(((Map<String, Object>) o).get("id")).equals(q.get("id")));
+                guardar();
+                return mapa("ok", true);
+            }
+        }
+        return err405();
+    }
+
+    /* ==================== CAJA POR CAJERO (fondo + corte) ==================== */
+
+    @SuppressWarnings("unchecked")
+    static Object asignaciones(String metodo, Map<String, Object> b, Map<String, String> q,
+                               String rol, Map<String, Object> ses) {
+        List<Object> as = lista("asignacionesCaja");
+        switch (metodo) {
+            case "GET": {
+                if (rol.equals("admin")) return as;
+                if (rol.equals("cajero")) {
+                    // el cajero solo ve su asignación de hoy
+                    String hoy = LocalDate.now().toString();
+                    List<Object> propias = new ArrayList<>();
+                    for (Object o : as) {
+                        Map<String, Object> a = (Map<String, Object>) o;
+                        if (str(ses.get("id")).equals(str(a.get("cajeroId")))
+                                && hoy.equals(a.get("fecha"))) propias.add(o);
+                    }
+                    return propias;
+                }
+                return err403();
+            }
+            case "POST": {
+                if (!soloAdmin(rol)) return err403();
+                String cajeroId = str(b.get("cajeroId"));
+                String fecha = b.containsKey("fecha") && !str(b.get("fecha")).isBlank()
+                        ? str(b.get("fecha")) : LocalDate.now().toString();
+                // no permitir dos cajas abiertas para el mismo cajero el mismo día
+                for (Object o : as) {
+                    Map<String, Object> a = (Map<String, Object>) o;
+                    if (cajeroId.equals(a.get("cajeroId")) && fecha.equals(a.get("fecha"))
+                            && "abierta".equals(a.get("estado")))
+                        return mapa("_status", 409, "error",
+                                "Ese cajero ya tiene una caja abierta para esa fecha. Ciérrala primero.");
+                }
+                Map<String, Object> desglose = b.get("desglose") instanceof Map
+                        ? (Map<String, Object>) b.get("desglose") : new LinkedHashMap<>();
+                Map<String, Object> a = mapa(
+                        "id", nuevoId(),
+                        "fecha", fecha,
+                        "cajeroId", cajeroId,
+                        "cajeroNombre", nombreCajero(cajeroId),
+                        "desglose", desglose,
+                        "total", totalDesglose(desglose),  // el total lo calcula el servidor
+                        "estado", "abierta",
+                        "cierre", null);
+                as.add(a);
+                guardar();
+                return a;
+            }
+            case "PUT": { // editar fondo (si sigue abierta) o cierre / corte de caja
+                if (!soloAdmin(rol)) return err403();
+                Map<String, Object> a = porId(as, str(b.get("id")));
+                if (a == null) return mapa("_status", 404, "error", "Asignación no existe");
+                if ("cerrada".equals(a.get("estado")))
+                    return mapa("_status", 409, "error", "Esta caja ya fue cerrada");
+                // ajustar el fondo antes del cierre
+                if (Boolean.TRUE.equals(b.get("soloEditar"))) {
+                    Map<String, Object> d = b.get("desglose") instanceof Map
+                            ? (Map<String, Object>) b.get("desglose") : new LinkedHashMap<>();
+                    a.put("desglose", d);
+                    a.put("total", totalDesglose(d));
+                    guardar();
+                    return a;
+                }
+                Map<String, Object> desgloseCierre = b.get("desglose") instanceof Map
+                        ? (Map<String, Object>) b.get("desglose") : new LinkedHashMap<>();
+                double contado = totalDesglose(desgloseCierre);
+                double ventasEfectivo = efectivoDelCajero(str(a.get("cajeroId")), str(a.get("fecha")));
+                double esperado = num(a.get("total")) + ventasEfectivo;
+                a.put("estado", "cerrada");
+                a.put("cierre", mapa(
+                        "fecha", ahora(),
+                        "desglose", desgloseCierre,
+                        "contado", contado,
+                        "ventasEfectivo", ventasEfectivo,
+                        "esperado", esperado,
+                        "diferencia", contado - esperado)); // negativo = faltante, positivo = sobrante
+                guardar();
+                return a;
+            }
+            case "DELETE": {
+                if (!soloAdmin(rol)) return err403();
+                as.removeIf(o -> str(((Map<String, Object>) o).get("id")).equals(q.get("id")));
+                guardar();
+                return mapa("ok", true);
+            }
+        }
+        return err405();
+    }
+
+    /** Suma un desglose de denominaciones: {"100": 2, "50": 2, ...} -> Q. */
+    static double totalDesglose(Map<String, Object> d) {
+        double t = 0;
+        for (Map.Entry<String, Object> e : d.entrySet()) {
+            try { t += Double.parseDouble(e.getKey()) * num(e.getValue()); }
+            catch (NumberFormatException ignored) { }
+        }
+        return Math.round(t * 100) / 100.0;
+    }
+
+    /** Ventas en efectivo de un cajero en un día (pedidos que él recibió). */
+    @SuppressWarnings("unchecked")
+    static double efectivoDelCajero(String cajeroId, String fecha) {
+        double t = 0;
+        for (Object o : lista("pedidos")) {
+            Map<String, Object> p = (Map<String, Object>) o;
+            if (!ESTADOS_VENTA.contains(str(p.get("estado")))) continue;
+            if (!cajeroId.equals(str(p.get("cajeroId")))) continue;
+            if (!str(p.get("fecha")).startsWith(fecha)) continue;
+            Map<String, Object> pago = p.get("pago") instanceof Map ? (Map<String, Object>) p.get("pago") : Map.of();
+            if ("efectivo".equals(pago.get("metodo"))) t += num(p.get("total"));
+        }
+        return t;
+    }
+
+    /* ==================== INVENTARIO ==================== */
+
+    @SuppressWarnings("unchecked")
+    static Object inventario(String metodo, Map<String, Object> b, Map<String, String> q) {
+        List<Object> inv = lista("inventario");
+        switch (metodo) {
+            case "GET": return inv;
+            case "POST": {
+                Map<String, Object> it = mapa(
+                        "id", nuevoId(),
+                        "nombre", str(b.get("nombre")),
+                        "unidad", str(b.get("unidad")),      // unidades, lb, paquetes...
+                        "cantidad", num(b.get("cantidad")),
+                        "minimo", num(b.get("minimo")),      // alerta cuando cantidad <= minimo
+                        "costo", num(b.get("costo")));       // costo unitario en Q
+                inv.add(it);
+                guardar();
+                return it;
+            }
+            case "PUT": {
+                Map<String, Object> it = porId(inv, str(b.get("id")));
+                if (it == null) return mapa("_status", 404, "error", "Artículo no existe");
+                for (String k : new String[]{"nombre", "unidad", "cantidad", "minimo", "costo"})
+                    if (b.containsKey(k)) it.put(k, b.get(k));
+                guardar();
+                return it;
+            }
+            case "DELETE": {
+                inv.removeIf(o -> str(((Map<String, Object>) o).get("id")).equals(q.get("id")));
+                guardar();
+                return mapa("ok", true);
+            }
+        }
+        return err405();
+    }
+
+    /* ==================== ESTADÍSTICAS ==================== */
+
+    static final Set<String> ESTADOS_VENTA = Set.of("recibido", "preparando", "listo", "entregado");
+
+    @SuppressWarnings("unchecked")
+    static Object estadisticas(Map<String, String> q) {
+        String desde = q.getOrDefault("desde", "0000-01-01");
+        String hasta = q.getOrDefault("hasta", "9999-12-31");
+        String hoy = LocalDate.now().toString();
+
+        double ventasTotal = 0, efectivoVentasRango = 0;
+        int numPedidos = 0;
+        double domicilio = 0, recoger = 0, efectivo = 0, transferencia = 0;
+        Map<String, double[]> porDia = new TreeMap<>();        // fecha -> [total, pedidos]
+        Map<String, double[]> top = new LinkedHashMap<>();     // nombre -> [cantidad, total]
+        double efectivoVentasTodas = 0, efectivoVentasHoy = 0; // para el saldo de caja
+
+        for (Object o : lista("pedidos")) {
+            Map<String, Object> p = (Map<String, Object>) o;
+            if (!ESTADOS_VENTA.contains(str(p.get("estado")))) continue;
+            String fecha = str(p.get("fecha"));
+            String dia = fecha.length() >= 10 ? fecha.substring(0, 10) : fecha;
+            double total = num(p.get("total"));
+            Map<String, Object> pago = p.get("pago") instanceof Map ? (Map<String, Object>) p.get("pago") : Map.of();
+            boolean esEfectivo = "efectivo".equals(pago.get("metodo"));
+
+            // saldo de caja: todas las ventas en efectivo de la historia (y las de hoy)
+            if (esEfectivo) {
+                efectivoVentasTodas += total;
+                if (dia.equals(hoy)) efectivoVentasHoy += total;
+            }
+
+            if (dia.compareTo(desde) < 0 || dia.compareTo(hasta) > 0) continue;
+
+            numPedidos++;
+            ventasTotal += total;
+            porDia.computeIfAbsent(dia, k -> new double[2]);
+            porDia.get(dia)[0] += total;
+            porDia.get(dia)[1] += 1;
+            if ("domicilio".equals(p.get("tipo"))) domicilio += total; else recoger += total;
+            if (esEfectivo) { efectivo += total; efectivoVentasRango += total; }
+            else transferencia += total;
+
+            for (Object it : (List<Object>) p.get("items")) {
+                Map<String, Object> item = (Map<String, Object>) it;
+                double[] acc = top.computeIfAbsent(str(item.get("nombre")), k -> new double[2]);
+                acc[0] += num(item.get("cantidad"));
+                acc[1] += num(item.get("precio")) * num(item.get("cantidad"));
+            }
+        }
+
+        double ticketPromedio = numPedidos > 0 ? ventasTotal / numPedidos : 0;
+        double mediaDiaria = !porDia.isEmpty() ? ventasTotal / porDia.size() : 0;
+
+        // finanzas manuales dentro del rango
+        double ingresosMan = 0, gastos = 0, egresos = 0, sueldos = 0;
+        for (Object o : lista("finanzas")) {
+            Map<String, Object> f = (Map<String, Object>) o;
+            String fecha = str(f.get("fecha"));
+            if (fecha.compareTo(desde) < 0 || fecha.compareTo(hasta) > 0) continue;
+            double m = num(f.get("monto"));
+            switch (str(f.get("tipo"))) {
+                case "ingreso" -> ingresosMan += m;
+                case "gasto"   -> gastos += m;
+                case "egreso"  -> egresos += m;
+                case "sueldo"  -> sueldos += m;
+            }
+        }
+        double perdidas = gastos + egresos + sueldos;
+        double ganancia = ventasTotal + ingresosMan - perdidas;
+
+        // caja: saldo total histórico = ventas en efectivo + entradas - salidas
+        double entradasCaja = 0, salidasCaja = 0;
+        for (Object o : lista("caja")) {
+            Map<String, Object> m = (Map<String, Object>) o;
+            if ("entrada".equals(m.get("tipo"))) entradasCaja += num(m.get("monto"));
+            else salidasCaja += num(m.get("monto"));
+        }
+        double saldoCaja = efectivoVentasTodas + entradasCaja - salidasCaja;
+
+        // inventario: valor total y artículos con poca existencia
+        double valorInventario = 0;
+        List<Object> bajoStock = new ArrayList<>();
+        for (Object o : lista("inventario")) {
+            Map<String, Object> it = (Map<String, Object>) o;
+            valorInventario += num(it.get("cantidad")) * num(it.get("costo"));
+            if (num(it.get("cantidad")) <= num(it.get("minimo")))
+                bajoStock.add(mapa("nombre", it.get("nombre"), "cantidad", it.get("cantidad"),
+                        "minimo", it.get("minimo"), "unidad", it.get("unidad")));
+        }
+
+        // top productos ordenado por cantidad (máximo 8)
+        List<Object> topLista = new ArrayList<>();
+        top.entrySet().stream()
+                .sorted((a, b2) -> Double.compare(b2.getValue()[0], a.getValue()[0]))
+                .limit(8)
+                .forEach(e -> topLista.add(mapa("nombre", e.getKey(),
+                        "cantidad", e.getValue()[0], "total", e.getValue()[1])));
+
+        // por día como lista ordenada
+        List<Object> dias = new ArrayList<>();
+        porDia.forEach((d, v) -> dias.add(mapa("fecha", d, "total", v[0], "pedidos", v[1])));
+
+        return mapa(
+                "ventasTotal", ventasTotal,
+                "numPedidos", numPedidos,
+                "ticketPromedio", ticketPromedio,
+                "mediaDiaria", mediaDiaria,
+                "porDia", dias,
+                "topProductos", topLista,
+                "porTipo", mapa("domicilio", domicilio, "recoger", recoger),
+                "porPago", mapa("efectivo", efectivo, "transferencia", transferencia),
+                "ingresosManuales", ingresosMan,
+                "gastos", gastos, "egresos", egresos, "sueldos", sueldos,
+                "perdidas", perdidas,
+                "ganancia", ganancia,
+                "saldoCaja", saldoCaja,
+                "entradasCaja", entradasCaja, "salidasCaja", salidasCaja,
+                "efectivoVentasHoy", efectivoVentasHoy,
+                "efectivoVentasTotal", efectivoVentasTodas,
+                "valorInventario", valorInventario,
+                "bajoStock", bajoStock);
+    }
+
     /* ==================== PEDIDOS ==================== */
 
     @SuppressWarnings("unchecked")
@@ -331,12 +640,13 @@ public class Server {
                 }
                 String ct = q.get("clienteToken");
                 List<Object> propios = new ArrayList<>();
-                if (ct != null)
+                if (ct != null && !ct.isBlank())
                     for (Object o : ps)
                         if (ct.equals(((Map<String, Object>) o).get("clienteToken"))) propios.add(o);
                 return propios;
             }
-            case "POST": { // cliente crea pedido
+            case "POST": { // cliente crea pedido; el cajero también puede (tomado en el restaurante)
+                boolean esCajero = rol.equals("cajero");
                 Map<String, Object> p = new LinkedHashMap<>();
                 p.put("id", nuevoId());
                 p.put("numero", siguienteNumero());
@@ -344,12 +654,20 @@ public class Server {
                 p.put("clienteToken", str(b.get("clienteToken")));
                 p.put("items", b.getOrDefault("items", new ArrayList<>()));
                 p.put("total", num(b.get("total")));
-                p.put("tipo", str(b.get("tipo"))); // domicilio | recoger
+                p.put("tipo", str(b.get("tipo"))); // domicilio | recoger | local (en el restaurante)
                 p.put("cliente", b.get("cliente")); // {nombre, direccion, telefono}
                 p.put("pago", b.get("pago"));       // {metodo, pagaCon, cambio}
                 p.put("notas", str(b.get("notas"))); // detalles: "sin cebolla", "solo ketchup"...
-                p.put("estado", "enviado");         // enviado -> recibido -> preparando -> listo -> entregado
-                p.put("tiempoEstimado", null);
+                if (esCajero) {
+                    // tomado directo en caja: ya está recibido y queda en el historial de ese cajero
+                    p.put("estado", "recibido");
+                    p.put("cajeroId", ses.get("id"));
+                    p.put("cajeroNombre", nombreCajero(str(ses.get("id"))));
+                    p.put("tiempoEstimado", b.get("tiempoEstimado"));
+                } else {
+                    p.put("estado", "enviado");     // enviado -> recibido -> preparando -> listo -> entregado
+                    p.put("tiempoEstimado", null);
+                }
                 ps.add(p);
                 guardar();
                 return p;
@@ -442,7 +760,7 @@ public class Server {
                             pedidosVisibles.add(str(((Map<String, Object>) o).get("id")));
                 } else {
                     String ct = q.get("clienteToken");
-                    if (ct != null)
+                    if (ct != null && !ct.isBlank())
                         for (Object o : lista("pedidos"))
                             if (ct.equals(((Map<String, Object>) o).get("clienteToken")))
                                 pedidosVisibles.add(str(((Map<String, Object>) o).get("id")));
@@ -593,13 +911,22 @@ public class Server {
         prods.add(prod("Soda Fresa", "bebida", "Soda saborizada preparada al momento.", 12));
 
         Map<String, Object> d = new LinkedHashMap<>();
-        d.put("config", mapa("nombre", "Los Perrones", "logo", null));
+        d.put("config", mapa("nombre", "Los Perrones", "logo", null,
+                "redes", mapa("facebook", "", "instagram", "", "whatsapp", "")));
         d.put("admin", mapa("usuario", "admin", "password", "admin123"));
         d.put("productos", prods);
         d.put("cajeros", new ArrayList<>(List.of(
                 mapa("id", nuevoId(), "nombre", "Cajero de prueba", "usuario", "cajero", "password", "cajero123", "sueldo", 3200.0))));
         d.put("ausencias", new ArrayList<>());
         d.put("finanzas", new ArrayList<>());
+        d.put("caja", new ArrayList<>());
+        d.put("asignaciones", new ArrayList<>());
+        d.put("inventario", new ArrayList<>(List.of(
+                mapa("id", nuevoId(), "nombre", "Salchichas", "unidad", "unidades", "cantidad", 50.0, "minimo", 15.0, "costo", 3.5),
+                mapa("id", nuevoId(), "nombre", "Pan para hot dog", "unidad", "unidades", "cantidad", 50.0, "minimo", 15.0, "costo", 1.5),
+                mapa("id", nuevoId(), "nombre", "Tocino", "unidad", "lb", "cantidad", 10.0, "minimo", 3.0, "costo", 25.0),
+                mapa("id", nuevoId(), "nombre", "Cheetos Flaming Hot", "unidad", "bolsas", "cantidad", 12.0, "minimo", 4.0, "costo", 8.0),
+                mapa("id", nuevoId(), "nombre", "Refrescos en lata", "unidad", "latas", "cantidad", 48.0, "minimo", 12.0, "costo", 5.0))));
         d.put("pedidos", new ArrayList<>());
         d.put("mensajes", new ArrayList<>());
         d.put("ultimoPedido", 0.0);
