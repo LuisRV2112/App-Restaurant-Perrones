@@ -138,8 +138,9 @@ function pintarMenu() {
 }
 
 function tarjetaProducto(p) {
+  const agotado = !esActivo(p);
   return `
-    <article class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+    <article class="card ${agotado ? 'agotado' : ''}" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
       ${imgProducto(p)}
       <div style="padding:14px;display:flex;flex-direction:column;gap:8px;flex:1">
         <div class="fila">
@@ -148,7 +149,9 @@ function tarjetaProducto(p) {
         </div>
         <p style="margin:0;font-size:14px;flex:1">${esc(p.descripcion)}</p>
         <div class="fila">
-          <button class="btn btn-salsa grow" onclick="agregar('${p.id}')">Agregar al carrito</button>
+          ${agotado
+            ? `<button class="btn grow" disabled>No disponible</button>`
+            : `<button class="btn btn-salsa grow" onclick="agregar('${p.id}')">Agregar al carrito</button>`}
           ${p.video ? `<button class="btn btn-mini" onclick="verVideo('${p.id}')">🎬 Video</button>` : ''}
         </div>
       </div>
@@ -175,9 +178,30 @@ function verVideo(id) {
 
 function agregar(id) {
   const p = productos.find(x => x.id === id);
+  if (!esActivo(p)) return toast('Ese producto está agotado por hoy 😅');
   if (p.categoria === 'combo') { personalizarCombo(p); return; }
   if (p.categoria === 'extra') { elegirDestinoExtra(p); return; }
+  if (p.categoria === 'hotdog') { personalizarHotdog(p); return; }
   meterAlCarrito(p, '');
+}
+
+/* --- hot dog: formulario unificado de ingredientes/extras --- */
+function personalizarHotdog(p) {
+  modal(`
+    <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
+    <p style="margin:4px 0;font-size:14px">${esc(p.descripcion)}</p>
+    ${htmlPersonalizacion(productos)}
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-salsa grow" onclick="confirmarHotdog('${p.id}')">Agregar al carrito</button>
+    </div>`);
+}
+
+function confirmarHotdog(id) {
+  const p = productos.find(x => x.id === id);
+  const per = leerPersonalizacion(productos);
+  meterAlCarrito(p, per.nota, p.precio + per.extraTotal);
+  cerrarModal();
 }
 
 /* --- extras: el cliente indica a qué hot dog se le agrega --- */
@@ -232,10 +256,10 @@ function confirmarExtra(id, forzarAparte) {
 
 /* --- combos --- */
 function personalizarCombo(p) {
-  const bebidas = productos.filter(x => x.categoria === 'bebida');
-  const snacks  = productos.filter(x => x.categoria === 'snack');
-  const dogs    = productos.filter(x => x.categoria === 'hotdog');
-  const extras  = productos.filter(x => x.categoria === 'extra');
+  const bebidas = productos.filter(x => x.categoria === 'bebida' && esActivo(x));
+  const snacks  = productos.filter(x => x.categoria === 'snack' && esActivo(x));
+  const dogs    = productos.filter(x => x.categoria === 'hotdog' && esActivo(x));
+  const extras  = productos.filter(x => x.categoria === 'extra' && esActivo(x));
   const sel = (id, lista) =>
     `<select id="${id}">${lista.map(x => `<option>${esc(x.nombre)}</option>`).join('')}</select>`;
   const esJauria = /jaur/i.test(p.nombre);
@@ -250,6 +274,7 @@ function personalizarCombo(p) {
       <label>Topping extra #2</label>${sel('opEx2', extras)}` : ''}
     <label>Snack de tus favoritos</label>${sel('opSnack', snacks)}
     <label>Bebida a elección</label>${sel('opBebida', bebidas)}
+    ${htmlPersonalizacion(productos)}
     <div class="fila mt">
       <button class="btn grow" onclick="cerrarModal()">Cancelar</button>
       <button class="btn btn-salsa grow" onclick="confirmarCombo('${p.id}', ${esJauria})">Agregar ${Q(p.precio)}</button>
@@ -262,14 +287,17 @@ function confirmarCombo(id, esJauria) {
   let nota = '';
   if (esJauria) nota += `Dogs: ${v('opDog1')} + ${v('opDog2')} · Extras: ${v('opEx1')} + ${v('opEx2')} · `;
   nota += `Snack: ${v('opSnack')} · Bebida: ${v('opBebida')}`;
-  meterAlCarrito(p, nota);
+  const per = leerPersonalizacion(productos);
+  if (per.nota) nota += ' · ' + per.nota;
+  meterAlCarrito(p, nota, p.precio + per.extraTotal);
   cerrarModal();
 }
 
-function meterAlCarrito(p, nota) {
-  const ya = carrito.find(i => i.productoId === p.id && i.nota === nota);
+function meterAlCarrito(p, nota, precioUnit) {
+  const precio = precioUnit != null ? precioUnit : p.precio;
+  const ya = carrito.find(i => i.productoId === p.id && i.nota === nota && i.precio === precio);
   if (ya) ya.cantidad++;
-  else carrito.push({ productoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, nota });
+  else carrito.push({ productoId: p.id, nombre: p.nombre, precio, cantidad: 1, nota });
   guardarCarrito();
   toast(`${p.nombre} agregado 🌭`);
 }

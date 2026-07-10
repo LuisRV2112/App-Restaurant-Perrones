@@ -29,7 +29,7 @@ Luego abrir en el navegador:
 | Página | URL |
 |---|---|
 | Tienda (cliente) | http://localhost:8080/ |
-| Acceso del personal | http://localhost:8080/login.html |
+| Acceso del personal (URL privada, sin botón público) | http://localhost:8080/login.html |
 
 ## 👥 Usuarios de prueba
 
@@ -46,7 +46,7 @@ El cliente **no necesita cuenta**: pide directamente desde la tienda.
 
 ### Cliente
 - Menú completo en **scroll continuo** (optimizado para PC y celular): al ir bajando se ven todas las categorías, con una barra fija para saltar a hot dogs, combos, extras, snacks o bebidas.
-- Personalizar combos (snack y bebida a elección; el Combo La Jauría permite elegir 2 hot dogs y 2 toppings extra).
+- **Personalización unificada**: al elegir un hot dog o combo se abre un solo formulario con todo — quitar/ajustar ingredientes (poca cebolla, sin cebolla, sin pimiento, sin mostaza, sin mayonesa, sin salsa dulce/ketchup, sin jalapeño), **extras con precio** tomados del menú (extra queso, tocino, piña, flaming hot...), las elecciones del combo (snack/bebida; La Jauría pide 2 hot dogs y 2 toppings) y un campo **"Otro"** de texto libre. Todo queda en la nota del mismo hot dog y los extras suman al precio automáticamente.
 - Al agregar un **extra**, el cliente indica **a qué hot dog del carrito se le agrega** (o pedirlo aparte en vasito).
 - Carrito: agregar, cambiar cantidades y eliminar productos mientras arma el pedido.
 - Enviar el pedido para **recoger en tienda** o **servicio a domicilio** (nombre completo, dirección, teléfono).
@@ -60,7 +60,7 @@ El cliente **no necesita cuenta**: pide directamente desde la tienda.
 ### Cajero
 - Recibe los pedidos en tiempo real (la pantalla se actualiza sola y avisa de pedidos nuevos).
 - Ve si el pedido es para **recoger en tienda** o **a domicilio**, con todos los datos del cliente y del pago (incluido el cambio a llevar).
-- Al recibir el pedido **ingresa el tiempo aproximado** en minutos, que se le muestra al cliente.
+- Al recibir el pedido indica el tiempo con **botones rápidos de 5' a 30' (de 5 en 5)** — un solo toque en la tablet — o escribe otro valor, y se le muestra al cliente.
 - Avanza el estado del pedido: recibido → preparando → listo → entregado.
 - **Chat** con el cliente de cada pedido, con **notificación sonora y apertura automática** del chat cuando el cliente escribe; también suena cuando entra un pedido nuevo.
 - **🖨 Imprimir ticket**: cada pedido se puede mandar a la **impresora POS** (formato de 72 mm, fuente monoespaciada) con productos, notas, total, pago y cambio.
@@ -68,7 +68,7 @@ El cliente **no necesita cuenta**: pide directamente desde la tienda.
 - **Historial propio**: cada cajero ve los pedidos pendientes y únicamente los pedidos que **él mismo recibió hoy** — cada día empieza un historial nuevo, y el pedido queda marcado con el nombre del cajero que lo atendió.
 
 ### Administrador
-- **Productos:** agregar, editar y eliminar productos; cambiar **precios en Quetzales**; subir o quitar **imágenes**; agregar o quitar **videos**, ya sea **pegando un enlace** (YouTube o .mp4) o **subiendo el archivo MP4** (máx. 12 MB).
+- **Productos:** agregar, editar, **desactivar/activar** (el producto se marca "AGOTADO/No disponible" para clientes y cajeros sin borrarlo, ideal cuando algo se acaba por el día) y eliminar definitivamente; cambiar **precios en Quetzales**; subir o quitar **imágenes**; agregar o quitar **videos**, ya sea **pegando un enlace** (YouTube o .mp4) o **subiendo el archivo MP4** (máx. 12 MB).
 - **Logo y redes:** agregar, actualizar o eliminar el logo del restaurante (se muestra en todas las páginas), y configurar las **redes sociales** (Facebook, Instagram y WhatsApp) que aparecen al final de la tienda; con WhatsApp se agrega además un **botón flotante** para que los clientes escriban directo.
 - **Cajeros:** agregar, actualizar o eliminar cajeros (con usuario, contraseña y sueldo).
 - **Asistencia:** registrar los días que un cajero no llegó a trabajar; el sistema calcula el descuento y el sueldo a pagar del mes.

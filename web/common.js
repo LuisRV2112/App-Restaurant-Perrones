@@ -127,3 +127,52 @@ function cerrarSesion() {
   sessionStorage.clear();
   location.href = 'login.html';
 }
+
+/* ==================== PERSONALIZACIÓN DE HOT DOGS Y COMBOS ====================
+   Formulario unificado: quitar/ajustar ingredientes (gratis), extras con precio
+   (salen de la categoría "extra" del menú) y un campo "Otro" libre.
+   Todo queda en la nota del mismo hot dog para no tener confusión. */
+
+const QUITAR_OPCIONES = [
+  'Poca cebolla', 'Sin cebolla', 'Sin pimiento', 'Sin mostaza',
+  'Sin mayonesa', 'Sin salsa dulce/ketchup', 'Sin jalapeño',
+];
+
+function esActivo(p) { return p.activo !== false; }
+
+function htmlPersonalizacion(productos) {
+  const extras = productos.filter(x => x.categoria === 'extra' && esActivo(x));
+  return `
+    <label>🥗 Ingredientes (marca lo que quieras cambiar)</label>
+    <div class="pers-grid">
+      ${QUITAR_OPCIONES.map((o, i) => `
+        <label class="pers-op"><input type="checkbox" id="pers-q-${i}"> ${o}</label>`).join('')}
+    </div>
+    <label>➕ Extras</label>
+    <div class="pers-grid">
+      ${extras.map(e => `
+        <label class="pers-op"><input type="checkbox" id="pers-e-${e.id}">
+          Extra ${esc(e.nombre)} <b>(+${Q(e.precio)})</b></label>`).join('')
+        || '<small>No hay extras disponibles.</small>'}
+    </div>
+    <label>✏️ Otro (si no está en las opciones)</label>
+    <input id="pers-otro" placeholder="Ej. bien dorado el pan, cortado a la mitad...">`;
+}
+
+/* Lee el formulario: devuelve la nota unificada y cuánto suman los extras */
+function leerPersonalizacion(productos) {
+  const partes = [];
+  let extraTotal = 0;
+  QUITAR_OPCIONES.forEach((o, i) => {
+    if (document.getElementById('pers-q-' + i)?.checked) partes.push(o);
+  });
+  productos.filter(x => x.categoria === 'extra' && esActivo(x)).forEach(e => {
+    if (document.getElementById('pers-e-' + e.id)?.checked) {
+      partes.push(`Extra ${e.nombre} (+${Q(e.precio)})`);
+      extraTotal += e.precio;
+    }
+  });
+  const otro = document.getElementById('pers-otro')?.value.trim();
+  if (otro) partes.push(otro);
+  return { nota: partes.join(' · '), extraTotal };
+}

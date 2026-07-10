@@ -163,6 +163,7 @@ public class Server {
                 p.put("precio", num(b.get("precio")));
                 p.put("imagen", b.get("imagen"));
                 p.put("video", b.get("video"));
+                p.put("activo", !Boolean.FALSE.equals(b.get("activo")));
                 prods.add(p);
                 guardar();
                 return p;
@@ -171,7 +172,7 @@ public class Server {
                 if (!soloAdmin(rol)) return err403();
                 Map<String, Object> p = porId(prods, str(b.get("id")));
                 if (p == null) return mapa("_status", 404, "error", "Producto no existe");
-                for (String k : new String[]{"nombre", "categoria", "descripcion", "precio", "imagen", "video"})
+                for (String k : new String[]{"nombre", "categoria", "descripcion", "precio", "imagen", "video", "activo"})
                     if (b.containsKey(k)) p.put(k, b.get(k));
                 guardar();
                 return p;
@@ -935,6 +936,6 @@ public class Server {
 
     static Map<String, Object> prod(String nombre, String cat, String desc, double precio) {
         return mapa("id", nuevoId(), "nombre", nombre, "categoria", cat,
-                "descripcion", desc, "precio", precio, "imagen", null, "video", null);
+                "descripcion", desc, "precio", precio, "imagen", null, "video", null, "activo", true);
     }
 }

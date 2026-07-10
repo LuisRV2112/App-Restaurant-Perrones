@@ -97,10 +97,12 @@ async function refrescar() {
 
       <div class="fila">
         ${p.estado === 'enviado' ? `
-          <input id="min-${p.id}" type="number" min="1" placeholder="min" style="width:90px">
-          <button class="btn btn-mini btn-jalapeno" onclick="recibir('${p.id}')">
-            ✅ Recibir e indicar tiempo
-          </button>` : ''}
+          <span style="font-weight:800">✅ Recibir, listo en:</span>
+          ${[5, 10, 15, 20, 25, 30].map(m =>
+            `<button class="btn btn-mini btn-jalapeno" style="padding:9px 13px"
+                     onclick="recibirCon('${p.id}', ${m})">${m}'</button>`).join('')}
+          <input id="min-${p.id}" type="number" min="1" placeholder="otro" style="width:74px">
+          <button class="btn btn-mini" onclick="recibir('${p.id}')">✓</button>` : ''}
         ${SIGUIENTE[p.estado] ? `
           <button class="btn btn-mini btn-mostaza" onclick="cambiarEstado('${p.id}','${SIGUIENTE[p.estado]}')">
             ➜ Marcar ${SIGUIENTE[p.estado]}
@@ -207,7 +209,11 @@ function imprimirTicketDe(p) {
 async function recibir(id) {
   const min = document.getElementById('min-' + id).value;
   if (!min || min <= 0) return toast('Indica el tiempo aproximado en minutos');
-  await API.put('/api/pedidos', { id, estado: 'recibido', tiempoEstimado: min });
+  recibirCon(id, min);
+}
+
+async function recibirCon(id, min) {
+  await API.put('/api/pedidos', { id, estado: 'recibido', tiempoEstimado: String(min) });
   toast(`Pedido recibido — ${min} min avisados al cliente`);
   refrescar();
 }
@@ -298,38 +304,62 @@ function pintarPosTabs() {
 
 function pintarPosGrid() {
   const lista = productosPos.filter(p => p.categoria === catPos);
-  document.getElementById('posGrid').innerHTML = lista.map(p => `
-    <button class="pos-prod" onclick="tocarProducto('${p.id}')">
+  document.getElementById('posGrid').innerHTML = lista.map(p => {
+    const agotado = !esActivo(p);
+    return `
+    <button class="pos-prod ${agotado ? 'agotado' : ''}" ${agotado ? 'disabled' : ''}
+            onclick="tocarProducto('${p.id}')">
       <span class="pos-emoji">${p.imagen
         ? `<img src="${p.imagen}" alt="">` : emojiCat(p.categoria)}</span>
       <b>${esc(p.nombre)}</b>
-      <span class="precio-tag" style="font-size:15px">${Q(p.precio)}</span>
-    </button>`).join('') || '<p>No hay productos en esta categoría.</p>';
+      <span class="precio-tag" style="font-size:15px">${agotado ? 'No disponible' : Q(p.precio)}</span>
+    </button>`;
+  }).join('') || '<p>No hay productos en esta categoría.</p>';
 }
 
 /* --- tocar un producto: directo, combo o extra con destino --- */
 
 function tocarProducto(id) {
   const p = productosPos.find(x => x.id === id);
+  if (!esActivo(p)) return;
   if (p.categoria === 'combo') { posCombo(p); return; }
   if (p.categoria === 'extra') { posExtra(p); return; }
+  if (p.categoria === 'hotdog') { posHotdog(p); return; }
   posAgregar(p, '');
 }
 
-function posAgregar(p, nota) {
-  const ya = carritoPos.find(i => i.productoId === p.id && i.nota === nota);
+function posHotdog(p) {
+  modalCajero(`
+    <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
+    ${htmlPersonalizacion(productosPos)}
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModalCajero()">Cancelar</button>
+      <button class="btn btn-salsa grow" style="padding:14px" onclick="posConfirmarHotdog('${p.id}')">Agregar</button>
+    </div>`);
+}
+
+function posConfirmarHotdog(id) {
+  const p = productosPos.find(x => x.id === id);
+  const per = leerPersonalizacion(productosPos);
+  posAgregar(p, per.nota, p.precio + per.extraTotal);
+  cerrarModalCajero();
+}
+
+function posAgregar(p, nota, precioUnit) {
+  const precio = precioUnit != null ? precioUnit : p.precio;
+  const ya = carritoPos.find(i => i.productoId === p.id && i.nota === nota && i.precio === precio);
   if (ya) ya.cantidad++;
-  else carritoPos.push({ productoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, nota });
+  else carritoPos.push({ productoId: p.id, nombre: p.nombre, precio, cantidad: 1, nota });
   pintarCarritoPos();
 }
 
 function posCombo(p) {
   const sel = (id, lista) =>
     `<select id="${id}" style="font-size:16px;padding:12px">${lista.map(x => `<option>${esc(x.nombre)}</option>`).join('')}</select>`;
-  const bebidas = productosPos.filter(x => x.categoria === 'bebida');
-  const snacks  = productosPos.filter(x => x.categoria === 'snack');
-  const dogs    = productosPos.filter(x => x.categoria === 'hotdog');
-  const extras  = productosPos.filter(x => x.categoria === 'extra');
+  const bebidas = productosPos.filter(x => x.categoria === 'bebida' && esActivo(x));
+  const snacks  = productosPos.filter(x => x.categoria === 'snack' && esActivo(x));
+  const dogs    = productosPos.filter(x => x.categoria === 'hotdog' && esActivo(x));
+  const extras  = productosPos.filter(x => x.categoria === 'extra' && esActivo(x));
   const esJauria = /jaur/i.test(p.nombre);
   modalCajero(`
     <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
@@ -340,6 +370,7 @@ function posCombo(p) {
       <label>Topping extra #2</label>${sel('posEx2', extras)}` : ''}
     <label>Snack</label>${sel('posSnack', snacks)}
     <label>Bebida</label>${sel('posBebida', bebidas)}
+    ${htmlPersonalizacion(productosPos)}
     <div class="fila mt">
       <button class="btn grow" onclick="cerrarModalCajero()">Cancelar</button>
       <button class="btn btn-salsa grow" style="padding:14px" onclick="posConfirmarCombo('${p.id}', ${esJauria})">Agregar</button>
@@ -352,7 +383,9 @@ function posConfirmarCombo(id, esJauria) {
   let nota = '';
   if (esJauria) nota += `Dogs: ${v('posDog1')} + ${v('posDog2')} · Extras: ${v('posEx1')} + ${v('posEx2')} · `;
   nota += `Snack: ${v('posSnack')} · Bebida: ${v('posBebida')}`;
-  posAgregar(p, nota);
+  const per = leerPersonalizacion(productosPos);
+  if (per.nota) nota += ' · ' + per.nota;
+  posAgregar(p, nota, p.precio + per.extraTotal);
   cerrarModalCajero();
 }
 

@@ -22,21 +22,36 @@ const NOMBRES_CAT = { hotdog: 'Hot dog', combo: 'Combo', bebida: 'Bebida', extra
 
 async function cargarProductos() {
   productos = await API.get('/api/productos');
-  document.getElementById('gridAdmin').innerHTML = productos.map(p => `
-    <article class="card" style="padding:0;overflow:hidden">
+  document.getElementById('gridAdmin').innerHTML = productos.map(p => {
+    const activo = esActivo(p);
+    return `
+    <article class="card ${activo ? '' : 'agotado'}" style="padding:0;overflow:hidden">
       ${imgProducto(p, 120)}
       <div style="padding:12px" class="col">
         <div class="fila">
           <b class="grow">${esc(p.nombre)}</b>
           <span class="precio-tag" style="font-size:14px">${Q(p.precio)}</span>
         </div>
-        <span class="chip">${NOMBRES_CAT[p.categoria] || p.categoria}</span>
+        <div class="fila">
+          <span class="chip">${NOMBRES_CAT[p.categoria] || p.categoria}</span>
+          <span class="chip ${activo ? 'listo' : ''}">${activo ? 'disponible' : 'agotado'}</span>
+        </div>
         <div class="fila">
           <button class="btn btn-mini btn-mostaza grow" onclick="formProducto('${p.id}')">✏️ Editar</button>
-          <button class="btn btn-mini btn-salsa" onclick="borrarProducto('${p.id}')">🗑</button>
+          ${activo
+            ? `<button class="btn btn-mini" title="Marcar agotado, sin borrarlo" onclick="toggleProducto('${p.id}', false)">🚫 Desactivar</button>`
+            : `<button class="btn btn-mini btn-jalapeno" onclick="toggleProducto('${p.id}', true)">✅ Activar</button>`}
+          <button class="btn btn-mini btn-salsa" title="Eliminar para siempre" onclick="borrarProducto('${p.id}')">🗑</button>
         </div>
       </div>
-    </article>`).join('');
+    </article>`;
+  }).join('');
+}
+
+async function toggleProducto(id, activo) {
+  await API.put('/api/productos', { id, activo });
+  toast(activo ? 'Producto disponible de nuevo ✔' : 'Producto marcado como agotado');
+  cargarProductos();
 }
 
 function formProducto(id) {
@@ -108,7 +123,7 @@ async function guardarProducto(id) {
 }
 
 async function borrarProducto(id) {
-  if (!confirm('¿Eliminar este producto del menú?')) return;
+  if (!confirm('¿Eliminar este producto PARA SIEMPRE? Si solo se acabó por hoy, mejor usa Desactivar.')) return;
   await API.del('/api/productos?id=' + id);
   toast('Producto eliminado');
   cargarProductos();
