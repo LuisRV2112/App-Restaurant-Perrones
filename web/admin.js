@@ -69,6 +69,8 @@ function formProducto(id) {
     <textarea id="pDesc" rows="3">${esc(p.descripcion || '')}</textarea>
     <label>Precio (Quetzales)</label>
     <input id="pPrecio" type="number" step="0.01" min="0" value="${p.precio ?? ''}">
+    <label>Opciones / sabores (separados por coma, opcional)</label>
+    <input id="pOpciones" value="${esc(p.opciones || '')}" placeholder="Ej. Rojo, Verde, Anaranjado">
     <label>Imagen del producto</label>
     ${p.imagen ? `<div class="fila"><img src="${p.imagen}" style="height:60px;border:2px solid var(--tinta);border-radius:8px">
                   <button class="btn btn-mini btn-salsa" onclick="imagenPendiente='BORRAR';this.parentNode.remove()">Quitar imagen</button></div>` : ''}
@@ -100,6 +102,7 @@ async function guardarProducto(id) {
     categoria: val('pCat'),
     descripcion: val('pDesc').trim(),
     precio: parseFloat(val('pPrecio') || 0),
+    opciones: val('pOpciones').trim() || null,
   };
   if (!b.nombre) return toast('El nombre es obligatorio');
   try {

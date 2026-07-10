@@ -59,6 +59,15 @@ async function refrescar() {
   if (filtro === 'activos') ps = ps.filter(p => !['entregado', 'cancelado'].includes(p.estado));
   ps.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
+  // el refresco automático NO debe borrar lo que el cajero está escribiendo:
+  // guardamos los valores de los campos de tiempo (y cuál tiene el foco) y los restauramos
+  const valoresMin = {};
+  document.querySelectorAll('#listaPedidos input[id^="min-"]').forEach(i => {
+    if (i.value) valoresMin[i.id] = i.value;
+  });
+  const focoId = document.activeElement && document.activeElement.id
+    && document.activeElement.id.startsWith('min-') ? document.activeElement.id : null;
+
   document.getElementById('listaPedidos').innerHTML = ps.length ? ps.map(p => `
     <div class="card">
       <div class="fila">
@@ -113,6 +122,16 @@ async function refrescar() {
       </div>
     </div>`).join('')
     : '<div class="card centro">No hay pedidos por ahora. 🧘</div>';
+
+  // restaurar lo que estaba escrito y el foco
+  Object.entries(valoresMin).forEach(([id, v]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v;
+  });
+  if (focoId) {
+    const el = document.getElementById(focoId);
+    if (el) el.focus();
+  }
 
   if (chatAbierto) cargarChat();
 }
@@ -325,7 +344,26 @@ function tocarProducto(id) {
   if (p.categoria === 'combo') { posCombo(p); return; }
   if (p.categoria === 'extra') { posExtra(p); return; }
   if (p.categoria === 'hotdog') { posHotdog(p); return; }
+  if (parseOpciones(p).length) { posSabor(p); return; }
   posAgregar(p, '');
+}
+
+function posSabor(p) {
+  modalCajero(`
+    <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
+    <label>Sabor</label>
+    <div class="col">
+      ${parseOpciones(p).map(o => `
+        <button class="btn btn-mostaza" style="padding:16px;font-size:17px"
+                onclick="posConfirmarSabor('${p.id}', '${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</button>`).join('')}
+    </div>
+    <div class="centro mt"><button class="btn" onclick="cerrarModalCajero()">Cancelar</button></div>`);
+}
+
+function posConfirmarSabor(id, sabor) {
+  const p = productosPos.find(x => x.id === id);
+  posAgregar(p, 'Sabor: ' + sabor);
+  cerrarModalCajero();
 }
 
 function posHotdog(p) {
@@ -355,7 +393,7 @@ function posAgregar(p, nota, precioUnit) {
 
 function posCombo(p) {
   const sel = (id, lista) =>
-    `<select id="${id}" style="font-size:16px;padding:12px">${lista.map(x => `<option>${esc(x.nombre)}</option>`).join('')}</select>`;
+    `<select id="${id}" style="font-size:16px;padding:12px">${nombresConOpciones(lista).map(n => `<option>${esc(n)}</option>`).join('')}</select>`;
   const bebidas = productosPos.filter(x => x.categoria === 'bebida' && esActivo(x));
   const snacks  = productosPos.filter(x => x.categoria === 'snack' && esActivo(x));
   const dogs    = productosPos.filter(x => x.categoria === 'hotdog' && esActivo(x));
@@ -448,7 +486,6 @@ function posCant(k, d) {
 function limpiarPos() {
   carritoPos = [];
   document.getElementById('posNombre').value = '';
-  document.getElementById('posNotas').value = '';
   document.getElementById('posPagaCon').value = '';
   pintarCarritoPos();
 }
@@ -482,7 +519,7 @@ async function cobrarPos() {
     total: posTotal(),
     tipo: 'local',
     cliente: { nombre: document.getElementById('posNombre').value.trim() || 'Cliente en restaurante' },
-    notas: document.getElementById('posNotas').value.trim(),
+    notas: '',
     pago: {
       metodo, pagaCon,
       cambio: metodo === 'efectivo' ? +(pagaCon - posTotal()).toFixed(2) : null,

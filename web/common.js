@@ -176,3 +176,21 @@ function leerPersonalizacion(productos) {
   if (otro) partes.push(otro);
   return { nota: partes.join(' · '), extraTotal };
 }
+
+/* ==================== OPCIONES / SABORES DE PRODUCTOS ==================== */
+
+/* "Rojo, Verde, Anaranjado" -> ["Rojo","Verde","Anaranjado"] */
+function parseOpciones(p) {
+  return (p.opciones || '').split(',').map(o => o.trim()).filter(Boolean);
+}
+
+/* Para los selectores de combos: expande "Doritos" en "Doritos (Rojo)", "Doritos (Verde)"... */
+function nombresConOpciones(lista) {
+  const res = [];
+  lista.forEach(p => {
+    const ops = parseOpciones(p);
+    if (ops.length) ops.forEach(o => res.push(`${p.nombre} (${o})`));
+    else res.push(p.nombre);
+  });
+  return res;
+}

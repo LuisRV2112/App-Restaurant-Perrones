@@ -182,7 +182,27 @@ function agregar(id) {
   if (p.categoria === 'combo') { personalizarCombo(p); return; }
   if (p.categoria === 'extra') { elegirDestinoExtra(p); return; }
   if (p.categoria === 'hotdog') { personalizarHotdog(p); return; }
+  if (parseOpciones(p).length) { elegirSabor(p); return; }
   meterAlCarrito(p, '');
+}
+
+/* --- productos con sabores (ej. Doritos: Rojo, Verde, Anaranjado) --- */
+function elegirSabor(p) {
+  modal(`
+    <h2 style="color:var(--salsa)">${esc(p.nombre)} — ${Q(p.precio)}</h2>
+    <label>Elige tu sabor</label>
+    <div class="col">
+      ${parseOpciones(p).map(o => `
+        <button class="btn btn-mostaza" style="padding:14px;font-size:16px"
+                onclick="confirmarSabor('${p.id}', '${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</button>`).join('')}
+    </div>
+    <div class="centro mt"><button class="btn" onclick="cerrarModal()">Cancelar</button></div>`);
+}
+
+function confirmarSabor(id, sabor) {
+  const p = productos.find(x => x.id === id);
+  meterAlCarrito(p, 'Sabor: ' + sabor);
+  cerrarModal();
 }
 
 /* --- hot dog: formulario unificado de ingredientes/extras --- */
@@ -261,7 +281,7 @@ function personalizarCombo(p) {
   const dogs    = productos.filter(x => x.categoria === 'hotdog' && esActivo(x));
   const extras  = productos.filter(x => x.categoria === 'extra' && esActivo(x));
   const sel = (id, lista) =>
-    `<select id="${id}">${lista.map(x => `<option>${esc(x.nombre)}</option>`).join('')}</select>`;
+    `<select id="${id}">${nombresConOpciones(lista).map(n => `<option>${esc(n)}</option>`).join('')}</select>`;
   const esJauria = /jaur/i.test(p.nombre);
 
   modal(`
@@ -378,12 +398,9 @@ function abrirCheckout() {
         <input id="fDireccion" placeholder="Zona, calle, casa..." value="${esc(d.cliente?.direccion || '')}">
       </span>
       <label>Número de teléfono</label>
-      <input id="fTelefono" placeholder="5555-5555" value="${esc(d.cliente?.telefono || '')}">
+      <input id="fTelefono" type="tel" inputmode="numeric" placeholder="5555-5555"
+             value="${esc(d.cliente?.telefono || '')}">
     </div>
-
-    <label>📝 Detalles del pedido (opcional)</label>
-    <textarea id="fDetalles" rows="3"
-      placeholder="Ej. hot dog tradicional sin cebolla y sin mostaza, el otro solo con ketchup">${esc(d.notas || '')}</textarea>
 
     <label>Método de pago</label>
     <select id="fPago" onchange="cambioPago()">
@@ -438,6 +455,8 @@ async function enviarPedido() {
 
   if (!nombre) return toast('Escribe tu nombre completo');
   if (!telefono) return toast('Escribe tu número de teléfono');
+  if (!/^\d{8,15}$/.test(telefono.replace(/[\s\-]/g, '')))
+    return toast('Ingresa solo tu número de teléfono');
   if (tipoPedido === 'domicilio' && !direccion) return toast('Escribe tu dirección');
   if (metodo === 'efectivo' && (!pagaCon || pagaCon < totalCarrito()))
     return toast('Indica con cuánto pagarás (debe cubrir el total)');
@@ -448,7 +467,7 @@ async function enviarPedido() {
     total: totalCarrito(),
     tipo: tipoPedido,
     cliente: { nombre, direccion, telefono },
-    notas: document.getElementById('fDetalles').value.trim(),
+    notas: '',
     pago: {
       metodo,
       pagaCon,

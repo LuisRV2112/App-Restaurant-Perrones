@@ -163,6 +163,7 @@ public class Server {
                 p.put("precio", num(b.get("precio")));
                 p.put("imagen", b.get("imagen"));
                 p.put("video", b.get("video"));
+                p.put("opciones", b.get("opciones")); // sabores/variantes: "Rojo, Verde, Anaranjado"
                 p.put("activo", !Boolean.FALSE.equals(b.get("activo")));
                 prods.add(p);
                 guardar();
@@ -172,7 +173,7 @@ public class Server {
                 if (!soloAdmin(rol)) return err403();
                 Map<String, Object> p = porId(prods, str(b.get("id")));
                 if (p == null) return mapa("_status", 404, "error", "Producto no existe");
-                for (String k : new String[]{"nombre", "categoria", "descripcion", "precio", "imagen", "video", "activo"})
+                for (String k : new String[]{"nombre", "categoria", "descripcion", "precio", "imagen", "video", "activo", "opciones"})
                     if (b.containsKey(k)) p.put(k, b.get(k));
                 guardar();
                 return p;
@@ -889,9 +890,10 @@ public class Server {
         prods.add(prod("Piña dulce", "extra", "Porción de piña dulce.", 5));
         prods.add(prod("Cheetos Flaming Hot", "extra", "Porción de Cheetos Flaming Hot.", 6));
         // Snacks
-        prods.add(prod("Papas fritas", "snack", "Papas fritas doradas y saladitas.", 12));
-        prods.add(prod("Nachos con queso", "snack", "Nachos bañados en queso fundido.", 15));
-        prods.add(prod("Aros de cebolla", "snack", "Aros de cebolla crujientes.", 14));
+        prods.add(prod("Papalinas", "snack", "Papalinas doradas polvoreadas con barbacoa.", 12));
+        Map<String, Object> doritos = prod("Doritos", "snack", "Doritos crujientes, elige tu sabor favorito.", 12);
+        doritos.put("opciones", "Rojo, Verde, Anaranjado");
+        prods.add(doritos);
         // Combos
         prods.add(prod("Combo Barillas", "combo", "Un hot dog Tradicional, snack de tus favoritos y bebida a elección.", 40));
         prods.add(prod("Combo Power", "combo", "Un hot dog Cheeto Power, snack de tus favoritos y bebida a elección.", 45));
