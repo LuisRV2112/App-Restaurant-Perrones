@@ -56,7 +56,7 @@ async function refrescar() {
   await vigilarMensajes(ps);
   primeraCarga = false;
 
-  if (filtro === 'activos') ps = ps.filter(p => !['entregado', 'cancelado'].includes(p.estado));
+  if (filtro === 'activos') ps = ps.filter(p => !['entregado', 'cancelado', 'devuelto'].includes(p.estado));
   ps.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   // el refresco automático NO debe borrar lo que el cajero está escribiendo:
@@ -119,7 +119,18 @@ async function refrescar() {
         ${p.tiempoEstimado ? `<span class="chip">⏱ ${esc(p.tiempoEstimado)} min</span>` : ''}
         <button class="btn btn-mini" onclick="abrirChat('${p.id}', ${p.numero})">💬 Chat</button>
         <button class="btn btn-mini btn-mostaza" onclick="imprimirTicket('${p.id}')">🖨 Imprimir ticket</button>
+        ${['enviado', 'recibido', 'preparando', 'listo'].includes(p.estado)
+          ? `<button class="btn btn-mini btn-salsa" onclick="modalAnular('${p.id}', ${p.numero}, 'cancelado')">✖ Cancelar pedido</button>` : ''}
+        ${['listo', 'entregado'].includes(p.estado)
+          ? `<button class="btn btn-mini" style="background:#8E6CC7;color:var(--blanco)" onclick="modalAnular('${p.id}', ${p.numero}, 'devuelto')">↩ Devolución</button>` : ''}
       </div>
+      ${p.motivoCancelacion || ['cancelado', 'devuelto'].includes(p.estado) ? `
+        <p style="margin:8px 0 0;background:#EFE3F7;border:2px dashed var(--tinta);border-radius:8px;padding:6px 10px;font-size:13px">
+          ${p.estado === 'devuelto' ? '↩ Devolución' : '✖ Cancelado'}
+          ${p.anuladoPor ? ' por ' + esc(p.anuladoPor) : ''}
+          ${p.fechaAnulacion ? ' · ' + esc(p.fechaAnulacion) : ''}
+          ${p.motivoCancelacion ? '<br>Motivo: ' + esc(p.motivoCancelacion) : ''}
+        </p>` : ''}
     </div>`).join('')
     : '<div class="card centro">No hay pedidos por ahora. 🧘</div>';
 
@@ -134,6 +145,33 @@ async function refrescar() {
   }
 
   if (chatAbierto) cargarChat();
+}
+
+/* ---------- cancelación y devolución ---------- */
+
+function modalAnular(id, numero, estado) {
+  const esDev = estado === 'devuelto';
+  modalCajero(`
+    <h2 style="color:var(--salsa)">${esDev ? '↩ Devolución' : '✖ Cancelar'} — Pedido #${numero}</h2>
+    <p style="margin:4px 0">${esDev
+      ? 'El pedido quedará como devuelto y se restará de las ventas, la caja y las estadísticas.'
+      : 'El pedido quedará cancelado y no contará en las ventas, la caja ni las estadísticas.'}</p>
+    <label>Motivo (para tu control)</label>
+    <textarea id="motivoAnular" rows="2"
+      placeholder="${esDev ? 'Ej. el hot dog llegó frío, cliente inconforme...' : 'Ej. el cliente dijo: quiero cancelar mi pedido, perdone...'}"></textarea>
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModalCajero()">Volver</button>
+      <button class="btn btn-salsa grow" onclick="confirmarAnular('${id}', '${estado}')">
+        ${esDev ? 'Confirmar devolución' : 'Confirmar cancelación'}</button>
+    </div>`);
+}
+
+async function confirmarAnular(id, estado) {
+  const motivo = document.getElementById('motivoAnular').value.trim();
+  await API.put('/api/pedidos', { id, estado, motivo });
+  cerrarModalCajero();
+  toast(estado === 'devuelto' ? '↩ Devolución registrada' : '✖ Pedido cancelado');
+  refrescar();
 }
 
 /* ---------- notificaciones de chat ---------- */
@@ -486,6 +524,7 @@ function posCant(k, d) {
 function limpiarPos() {
   carritoPos = [];
   document.getElementById('posNombre').value = '';
+  document.getElementById('posNotas').value = '';
   document.getElementById('posPagaCon').value = '';
   pintarCarritoPos();
 }
@@ -519,7 +558,7 @@ async function cobrarPos() {
     total: posTotal(),
     tipo: 'local',
     cliente: { nombre: document.getElementById('posNombre').value.trim() || 'Cliente en restaurante' },
-    notas: '',
+    notas: document.getElementById('posNotas').value.trim(),
     pago: {
       metodo, pagaCon,
       cambio: metodo === 'efectivo' ? +(pagaCon - posTotal()).toFixed(2) : null,

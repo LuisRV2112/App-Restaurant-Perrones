@@ -155,6 +155,7 @@ label { font-weight: 800; font-size: 13px; display: block; margin: 10px 0 4px; t
 .chip.listo      { background: var(--jalapeno); color: var(--blanco); }
 .chip.entregado  { background: var(--tinta);    color: var(--mostaza); }
 .chip.cancelado  { background: #999; color: var(--blanco); }
+.chip.devuelto   { background: #8E6CC7; color: var(--blanco); }
 
 /* -------- utilidades -------- */
 .fila { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }

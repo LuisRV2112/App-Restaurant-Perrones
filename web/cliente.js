@@ -91,7 +91,7 @@ async function revisarNovedades() {
     }
 
     // aviso (y apertura automática) cuando escribe el cajero
-    if (['entregado', 'cancelado'].includes(p.estado)) continue;
+    if (['entregado', 'cancelado', 'devuelto'].includes(p.estado)) continue;
     let ms;
     try { ms = await API.get('/api/mensajes?pedidoId=' + p.id); }
     catch (e) { continue; }
@@ -402,6 +402,10 @@ function abrirCheckout() {
              value="${esc(d.cliente?.telefono || '')}">
     </div>
 
+    <label>📝 Detalles del pedido (opcional)</label>
+    <textarea id="fDetalles" rows="3"
+      placeholder="Ej. hot dog tradicional sin cebolla y sin mostaza, el otro solo con ketchup">${esc(d.notas || '')}</textarea>
+
     <label>Método de pago</label>
     <select id="fPago" onchange="cambioPago()">
       <option value="efectivo">Efectivo</option>
@@ -467,7 +471,7 @@ async function enviarPedido() {
     total: totalCarrito(),
     tipo: tipoPedido,
     cliente: { nombre, direccion, telefono },
-    notas: '',
+    notas: document.getElementById('fDetalles').value.trim(),
     pago: {
       metodo,
       pagaCon,

@@ -46,10 +46,26 @@ public class Server {
     static synchronized void cargar() throws IOException {
         if (Files.exists(DB)) {
             db = (Map<String, Object>) Json.parse(Files.readString(DB, StandardCharsets.UTF_8));
+            migrarAdmins();
         } else {
             db = semilla();
             guardar();
         }
+    }
+
+    /** Bases de datos viejas tenían un solo "admin"; se migran a la lista "admins". */
+    @SuppressWarnings("unchecked")
+    static void migrarAdmins() {
+        if (db.containsKey("admins")) return;
+        List<Object> as = new ArrayList<>();
+        Map<String, Object> viejo = db.get("admin") instanceof Map
+                ? (Map<String, Object>) db.get("admin") : null;
+        as.add(mapa("id", nuevoId(), "nombre", "Administrador",
+                "usuario", viejo != null ? viejo.get("usuario") : "admin",
+                "password", viejo != null ? viejo.get("password") : "admin123"));
+        db.put("admins", as);
+        db.remove("admin");
+        guardar();
     }
 
     static synchronized void guardar() {
@@ -76,6 +92,7 @@ public class Server {
                 case "/api/login"     -> metodo.equals("POST") ? login(body) : err405();
                 case "/api/config"    -> config(metodo, body, rol);
                 case "/api/productos" -> productos(metodo, body, q, rol);
+                case "/api/admins"    -> soloAdmin(rol) ? admins(metodo, body, q, ses) : err403();
                 case "/api/cajeros"   -> soloAdmin(rol) ? cajeros(metodo, body, q) : err403();
                 case "/api/ausencias" -> soloAdmin(rol) ? ausencias(metodo, body, q) : err403();
                 case "/api/finanzas"  -> soloAdmin(rol) ? finanzas(metodo, body, q) : err403();
@@ -109,11 +126,13 @@ public class Server {
     @SuppressWarnings("unchecked")
     static Object login(Map<String, Object> b) {
         String u = str(b.get("usuario")), p = str(b.get("password"));
-        Map<String, Object> admin = (Map<String, Object>) db.get("admin");
-        if (u.equals(admin.get("usuario")) && p.equals(admin.get("password"))) {
-            String t = UUID.randomUUID().toString();
-            sesiones.put(t, mapa("rol", "admin", "usuario", u));
-            return mapa("token", t, "rol", "admin", "nombre", "Administrador");
+        for (Object o : lista("admins")) {
+            Map<String, Object> a = (Map<String, Object>) o;
+            if (u.equals(a.get("usuario")) && p.equals(a.get("password"))) {
+                String t = UUID.randomUUID().toString();
+                sesiones.put(t, mapa("rol", "admin", "usuario", u, "id", a.get("id")));
+                return mapa("token", t, "rol", "admin", "nombre", a.get("nombre"));
+            }
         }
         for (Object o : lista("cajeros")) {
             Map<String, Object> c = (Map<String, Object>) o;
@@ -188,6 +207,75 @@ public class Server {
         return err405();
     }
 
+    /* ==================== ADMINISTRADORES (máximo 3) ==================== */
+
+    @SuppressWarnings("unchecked")
+    static Object admins(String metodo, Map<String, Object> b, Map<String, String> q, Map<String, Object> ses) {
+        List<Object> as = lista("admins");
+        switch (metodo) {
+            case "GET": return as;
+            case "POST": {
+                if (as.size() >= 3)
+                    return mapa("_status", 409, "error", "Máximo 3 administradores. Elimina uno para agregar otro.");
+                String usuario = str(b.get("usuario")).trim();
+                if (usuario.isBlank() || str(b.get("password")).isBlank())
+                    return mapa("_status", 400, "error", "Usuario y contraseña son obligatorios");
+                if (usuarioOcupado(usuario, null))
+                    return mapa("_status", 409, "error", "Ese usuario ya existe (admin o cajero). Elige otro.");
+                Map<String, Object> a = mapa(
+                        "id", nuevoId(),
+                        "nombre", str(b.get("nombre")).isBlank() ? "Administrador" : str(b.get("nombre")),
+                        "usuario", usuario,
+                        "password", str(b.get("password")));
+                as.add(a);
+                guardar();
+                return a;
+            }
+            case "PUT": { // cambiar usuario/contraseña de cualquier admin (incluido uno mismo)
+                Map<String, Object> a = porId(as, str(b.get("id")));
+                if (a == null) return mapa("_status", 404, "error", "Administrador no existe");
+                if (b.containsKey("usuario")) {
+                    String usuario = str(b.get("usuario")).trim();
+                    if (usuario.isBlank())
+                        return mapa("_status", 400, "error", "El usuario no puede quedar vacío");
+                    if (usuarioOcupado(usuario, str(a.get("id"))))
+                        return mapa("_status", 409, "error", "Ese usuario ya existe (admin o cajero). Elige otro.");
+                    a.put("usuario", usuario);
+                }
+                if (b.containsKey("password")) {
+                    if (str(b.get("password")).isBlank())
+                        return mapa("_status", 400, "error", "La contraseña no puede quedar vacía");
+                    a.put("password", b.get("password"));
+                }
+                if (b.containsKey("nombre")) a.put("nombre", b.get("nombre"));
+                guardar();
+                return a;
+            }
+            case "DELETE": {
+                String id = q.get("id");
+                if (str(ses.get("id")).equals(id))
+                    return mapa("_status", 409, "error",
+                            "No puedes eliminarte a ti mismo. Pide a otro administrador que lo haga.");
+                as.removeIf(o -> str(((Map<String, Object>) o).get("id")).equals(id));
+                guardar();
+                return mapa("ok", true);
+            }
+        }
+        return err405();
+    }
+
+    /** ¿El usuario ya lo usa otro admin o algún cajero? */
+    @SuppressWarnings("unchecked")
+    static boolean usuarioOcupado(String usuario, String exceptoAdminId) {
+        for (Object o : lista("admins")) {
+            Map<String, Object> a = (Map<String, Object>) o;
+            if (usuario.equals(a.get("usuario")) && !str(a.get("id")).equals(exceptoAdminId)) return true;
+        }
+        for (Object o : lista("cajeros"))
+            if (usuario.equals(((Map<String, Object>) o).get("usuario"))) return true;
+        return false;
+    }
+
     /* ==================== CAJEROS ==================== */
 
     @SuppressWarnings("unchecked")
@@ -196,6 +284,8 @@ public class Server {
         switch (metodo) {
             case "GET": return cs;
             case "POST": {
+                if (usuarioOcupado(str(b.get("usuario")).trim(), null))
+                    return mapa("_status", 409, "error", "Ese usuario ya existe (admin o cajero). Elige otro.");
                 Map<String, Object> c = mapa(
                         "id", nuevoId(),
                         "nombre", str(b.get("nombre")),
@@ -300,7 +390,7 @@ public class Server {
             if (fecha.compareTo(desde) < 0 || fecha.compareTo(hasta) > 0) continue;
             pedidosEntrados++;
             String estado = str(p.get("estado"));
-            if (estado.equals("cancelado")) continue;
+            if (estado.equals("cancelado") || estado.equals("devuelto")) continue;
             pedidosCompletados++;
             for (Object it : (List<Object>) p.get("items")) {
                 Map<String, Object> item = (Map<String, Object>) it;
@@ -518,9 +608,18 @@ public class Server {
         Map<String, double[]> top = new LinkedHashMap<>();     // nombre -> [cantidad, total]
         double efectivoVentasTodas = 0, efectivoVentasHoy = 0; // para el saldo de caja
 
+        int pedidosCancelados = 0, pedidosDevueltos = 0;
+        double montoCancelado = 0, montoDevuelto = 0;
+
         for (Object o : lista("pedidos")) {
             Map<String, Object> p = (Map<String, Object>) o;
-            if (!ESTADOS_VENTA.contains(str(p.get("estado")))) continue;
+            String est = str(p.get("estado"));
+            String diaP = str(p.get("fecha"));
+            diaP = diaP.length() >= 10 ? diaP.substring(0, 10) : diaP;
+            boolean enRango = diaP.compareTo(desde) >= 0 && diaP.compareTo(hasta) <= 0;
+            if (enRango && est.equals("cancelado")) { pedidosCancelados++; montoCancelado += num(p.get("total")); }
+            if (enRango && est.equals("devuelto"))  { pedidosDevueltos++;  montoDevuelto += num(p.get("total")); }
+            if (!ESTADOS_VENTA.contains(est)) continue;
             String fecha = str(p.get("fecha"));
             String dia = fecha.length() >= 10 ? fecha.substring(0, 10) : fecha;
             double total = num(p.get("total"));
@@ -622,7 +721,9 @@ public class Server {
                 "efectivoVentasHoy", efectivoVentasHoy,
                 "efectivoVentasTotal", efectivoVentasTodas,
                 "valorInventario", valorInventario,
-                "bajoStock", bajoStock);
+                "bajoStock", bajoStock,
+                "pedidosCancelados", pedidosCancelados, "montoCancelado", montoCancelado,
+                "pedidosDevueltos", pedidosDevueltos, "montoDevuelto", montoDevuelto);
     }
 
     /* ==================== PEDIDOS ==================== */
@@ -678,10 +779,19 @@ public class Server {
                 Map<String, Object> p = porId(ps, str(b.get("id")));
                 if (p == null) return mapa("_status", 404, "error", "Pedido no existe");
                 if (rol.equals("cajero") || rol.equals("admin")) {
-                    // al recibirlo, el pedido queda asignado a ese cajero (su historial)
-                    if (rol.equals("cajero") && "recibido".equals(b.get("estado")) && p.get("cajeroId") == null) {
+                    String nuevoEstado = str(b.get("estado"));
+                    // al recibirlo (o cancelarlo directo), el pedido queda asignado a ese cajero
+                    if (rol.equals("cajero") && p.get("cajeroId") == null
+                            && Set.of("recibido", "cancelado", "devuelto").contains(nuevoEstado)) {
                         p.put("cajeroId", ses.get("id"));
                         p.put("cajeroNombre", nombreCajero(str(ses.get("id"))));
+                    }
+                    // cancelación o devolución: guardar motivo y quién lo hizo (para control)
+                    if (Set.of("cancelado", "devuelto").contains(nuevoEstado)) {
+                        p.put("motivoCancelacion", str(b.get("motivo")));
+                        p.put("anuladoPor", rol.equals("cajero")
+                                ? nombreCajero(str(ses.get("id"))) : "Administrador");
+                        p.put("fechaAnulacion", ahora());
                     }
                     if (b.containsKey("estado")) p.put("estado", b.get("estado"));
                     if (b.containsKey("tiempoEstimado")) p.put("tiempoEstimado", b.get("tiempoEstimado"));
@@ -916,7 +1026,9 @@ public class Server {
         Map<String, Object> d = new LinkedHashMap<>();
         d.put("config", mapa("nombre", "Los Perrones", "logo", null,
                 "redes", mapa("facebook", "", "instagram", "", "whatsapp", "")));
-        d.put("admin", mapa("usuario", "admin", "password", "admin123"));
+        d.put("admins", new ArrayList<>(List.of(
+                mapa("id", nuevoId(), "nombre", "Administrador",
+                        "usuario", "admin", "password", "admin123"))));
         d.put("productos", prods);
         d.put("cajeros", new ArrayList<>(List.of(
                 mapa("id", nuevoId(), "nombre", "Cajero de prueba", "usuario", "cajero", "password", "cajero123", "sueldo", 3200.0))));

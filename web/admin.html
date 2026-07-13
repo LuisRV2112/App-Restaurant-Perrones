@@ -19,7 +19,7 @@
   <nav class="fila" id="tabs">
     <button class="btn btn-salsa" data-t="productos" onclick="verTab('productos')">🌭 Productos</button>
     <button class="btn" data-t="logo"       onclick="verTab('logo')">🖼 Logo y redes</button>
-    <button class="btn" data-t="cajeros"    onclick="verTab('cajeros')">👥 Cajeros</button>
+    <button class="btn" data-t="cajeros"    onclick="verTab('cajeros')">👥 Personal</button>
     <button class="btn" data-t="asistencia" onclick="verTab('asistencia')">📅 Asistencia</button>
     <button class="btn" data-t="finanzas"   onclick="verTab('finanzas')">🧮 Finanzas</button>
     <button class="btn" data-t="reportes"   onclick="verTab('reportes')">📊 Reportes</button>
@@ -66,9 +66,17 @@
     </div>
   </section>
 
-  <!-- ========== CAJEROS ========== -->
+  <!-- ========== PERSONAL: ADMINS Y CAJEROS ========== -->
   <section id="tab-cajeros" class="mt oculto">
     <div class="fila">
+      <h2>🔐 Administradores</h2>
+      <span class="chip" id="chipAdmins"></span>
+      <div class="grow"></div>
+      <button class="btn btn-jalapeno" id="btnAddAdmin" onclick="formAdmin()">＋ Agregar administrador</button>
+    </div>
+    <div class="card mt" style="overflow-x:auto"><table id="tablaAdmins"></table></div>
+
+    <div class="fila mt">
       <h2>Cajeros</h2>
       <div class="grow"></div>
       <button class="btn btn-jalapeno" onclick="formCajero()">＋ Agregar cajero</button>

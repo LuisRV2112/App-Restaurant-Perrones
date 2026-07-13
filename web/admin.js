@@ -174,8 +174,29 @@ async function quitarLogo() {
 
 /* ==================== CAJEROS ==================== */
 
+/* ==================== PERSONAL: ADMINS Y CAJEROS ==================== */
+
+let admins = [];
+
 async function cargarCajeros() {
-  cajeros = await API.get('/api/cajeros');
+  [admins, cajeros] = await Promise.all([API.get('/api/admins'), API.get('/api/cajeros')]);
+
+  // administradores (máximo 3)
+  document.getElementById('chipAdmins').textContent = `${admins.length} de 3`;
+  document.getElementById('btnAddAdmin').disabled = admins.length >= 3;
+  document.getElementById('tablaAdmins').innerHTML = `
+    <tr><th>Nombre</th><th>Usuario</th><th>Acciones</th></tr>
+    ${admins.map(a => `
+      <tr>
+        <td>${esc(a.nombre)}</td>
+        <td>${esc(a.usuario)}</td>
+        <td class="fila">
+          <button class="btn btn-mini btn-mostaza" onclick="formAdmin('${a.id}')">✏️ Cambiar usuario/contraseña</button>
+          <button class="btn btn-mini btn-salsa" onclick="borrarAdmin('${a.id}')">🗑 Eliminar</button>
+        </td>
+      </tr>`).join('')}`;
+
+  // cajeros
   document.getElementById('tablaCajeros').innerHTML = `
     <tr><th>Nombre</th><th>Usuario</th><th>Sueldo mensual</th><th>Acciones</th></tr>
     ${cajeros.map(c => `
@@ -188,6 +209,42 @@ async function cargarCajeros() {
           <button class="btn btn-mini btn-salsa" onclick="borrarCajero('${c.id}')">🗑 Eliminar</button>
         </td>
       </tr>`).join('') || '<tr><td colspan="4">Sin cajeros registrados.</td></tr>'}`;
+}
+
+function formAdmin(id) {
+  const a = admins.find(x => x.id === id) || {};
+  modal(`
+    <h2 style="color:var(--salsa)">${id ? 'Cambiar usuario / contraseña' : 'Agregar administrador'}</h2>
+    ${id ? `<p style="margin:4px 0;font-size:14px">El cambio aplica de inmediato; con estos nuevos datos se inicia sesión.</p>` : ''}
+    <label>Nombre</label><input id="aNombre" value="${esc(a.nombre || '')}">
+    <label>Usuario</label><input id="aUsuario" value="${esc(a.usuario || '')}">
+    <label>Contraseña</label><input id="aPass" value="${esc(a.password || '')}">
+    <div class="fila mt">
+      <button class="btn grow" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-jalapeno grow" onclick="guardarAdmin('${id || ''}')">Guardar</button>
+    </div>`);
+}
+
+async function guardarAdmin(id) {
+  const val = i => document.getElementById(i).value;
+  const b = { nombre: val('aNombre').trim(), usuario: val('aUsuario').trim(), password: val('aPass') };
+  if (!b.usuario || !b.password) return toast('Completa el usuario y la contraseña');
+  try {
+    if (id) await API.put('/api/admins', { id, ...b });
+    else await API.post('/api/admins', b);
+    toast('Administrador guardado ✔');
+    cerrarModal();
+    cargarCajeros();
+  } catch (e) { toast(e.message); }
+}
+
+async function borrarAdmin(id) {
+  if (!confirm('¿Eliminar a este administrador? Ya no podrá iniciar sesión.')) return;
+  try {
+    await API.del('/api/admins?id=' + id);
+    toast('Administrador eliminado');
+    cargarCajeros();
+  } catch (e) { toast(e.message); }
 }
 
 function formCajero(id) {
@@ -754,6 +811,15 @@ async function cargarReporte() {
       <div class="card grow centro" style="background:${gananciaOK ? '#D9F2DC' : '#FFD3C9'}">
         <b>${gananciaOK ? 'Ganancia' : 'Pérdida'} del período</b>
         <div style="font-family:var(--display);font-size:34px">${Q(Math.abs(e.ganancia))}</div></div>
+    </div>
+
+    <div class="fila mt">
+      <div class="card grow centro"><b>✖ Pedidos cancelados</b>
+        <div style="font-family:var(--display);font-size:24px">${e.pedidosCancelados}</div>
+        <small>${Q(e.montoCancelado)} que no entraron</small></div>
+      <div class="card grow centro"><b>↩ Devoluciones</b>
+        <div style="font-family:var(--display);font-size:24px">${e.pedidosDevueltos}</div>
+        <small>${Q(e.montoDevuelto)} devueltos</small></div>
     </div>
 
     <div class="fila mt">
